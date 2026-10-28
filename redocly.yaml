@@ -1,0 +1,22 @@
+# Redocly lint configuration. Provenance: livetennisapi-oss/openapi/redocly.yaml (2026-10-28).
+# Redocly rather than Spectral: this is an OpenAPI 3.1 document with nullable type arrays, which the
+# Spectral oas ruleset does not handle.
+extends:
+  - recommended
+
+rules:
+  # Tags are ordered by the send flow (identity, documents, quotes, faxes...), not alphabetically.
+  tags-alphabetical: off
+  # The summary is the one line a model reads. A description is added only where it says more.
+  operation-description: off
+  # The schemas the server emits for signed-URL responses are files, documented without a body schema.
+  no-unused-components: off
+  # Enforced: the SDKs name their methods from operationId, the docs link by it, a rename is a break.
+  operation-operationId: error
+  operation-operationId-unique: error
+  operation-4xx-response: error
+  info-license: error
+  info-contact: error
+  no-server-trailing-slash: error
+  security-defined: error
+  no-unresolved-refs: error

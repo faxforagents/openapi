@@ -1,0 +1,24 @@
+name: lint
+
+# Provenance: livetennisapi-oss/openapi/.github/workflows/lint.yml (2026-10-28), actions pinned by SHA.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  redocly:
+    name: Redocly lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - name: Lint the document
+        run: npx --yes @redocly/cli@2.71.2 lint openapi.yaml --format=stylish

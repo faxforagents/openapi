@@ -1,0 +1,60 @@
+name: pages
+
+# Provenance: livetennisapi-oss/openapi/.github/workflows/pages.yml (2026-10-28), actions pinned by SHA.
+# Publishes docs/ to GitHub Pages: the Scalar page, the plain reference and llms.txt.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Publish the reference
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml==6.0.3
+
+      - name: Assemble the site
+        run: |
+          cp openapi.yaml docs/openapi.yaml
+          python scripts/build_reference.py
+          ls -la docs/
+
+      - name: The plain reference is readable without JavaScript
+        run: |
+          python - <<'PY'
+          import re, sys
+          html = open("docs/reference.html", encoding="utf-8").read()
+          text = re.sub(r"<script.*?</script>|<style.*?</style>", "", html, flags=re.S)
+          text = " ".join(re.sub(r"<[^>]+>", " ", text).split())
+          required = ["/v1/faxes", "/v1/fax-quotes", "Idempotency-Key", "delivered", "unknown", "fax:send", "ErrorEnvelope"]
+          missing = [k for k in required if k not in html]
+          if len(text) < 5000 or missing:
+              print(f"FAIL: {len(text)} chars, missing {missing}")
+              sys.exit(1)
+          print(f"OK: {len(text):,} chars of text, all key terms present")
+          PY
+
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: docs
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

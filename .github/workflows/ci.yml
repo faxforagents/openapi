@@ -1,0 +1,76 @@
+name: ci
+
+# Provenance: livetennisapi-oss/openapi/.github/workflows/lint.yml contract job (2026-10-28).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Document holds its contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml==6.0.3
+
+      - name: Generated reference and llms.txt are current
+        run: python scripts/build_reference.py --check
+
+      - name: Truth pins hold
+        run: sh scripts/truthcheck.sh
+
+      - name: Structural invariants
+        run: |
+          python - <<'PY'
+          import sys, yaml
+          spec = yaml.safe_load(open("openapi.yaml"))
+          fail = []
+          if not spec.get("openapi", "").startswith("3.1"):
+              fail.append(f"expected OpenAPI 3.1, got {spec.get('openapi')!r}")
+          if [s["url"] for s in spec.get("servers", [])] != ["https://api.faxforagents.com"]:
+              fail.append("unexpected servers")
+          seen = {}
+          for path, ops in spec["paths"].items():
+              if not path.startswith("/v1/"):
+                  fail.append(f"{path} is not a /v1 path")
+              for method, op in ops.items():
+                  label = f"{method.upper()} {path}"
+                  oid = op.get("operationId")
+                  if not oid:
+                      fail.append(f"{label} has no operationId")
+                  elif oid in seen:
+                      fail.append(f"operationId {oid} duplicated in {seen[oid]} and {label}")
+                  else:
+                      seen[oid] = label
+                  llm = op.get("x-llm") or {}
+                  if "scope" not in llm:
+                      fail.append(f"{label} has no x-llm.scope")
+                  if "admin" in (op.get("tags") or []):
+                      fail.append(f"{label} is an admin operation")
+                  if not any(str(c).startswith("4") for c in op.get("responses", {})):
+                      fail.append(f"{label} documents no 4xx response")
+          schemes = set(spec.get("components", {}).get("securitySchemes", {}))
+          for required in ("bearerAuth", "apiKeyHeader"):
+              if required not in schemes:
+                  fail.append(f"missing security scheme {required}")
+          if fail:
+              print("CONTRACT VIOLATIONS:")
+              for f in fail:
+                  print(" -", f)
+              sys.exit(1)
+          print(f"OK: {len(spec['paths'])} paths, {len(seen)} operations, {len(spec['components']['schemas'])} schemas")
+          PY
+
+      - name: Live document still curates to this file (informational on pull requests)
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        run: python scripts/curate.py --check

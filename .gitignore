@@ -1,0 +1,6 @@
+node_modules/
+__pycache__/
+*.pyc
+docs/openapi.yaml
+docs/openapi.json
+.venv/
