@@ -6,7 +6,7 @@ JSB Holdings LLC.
 
 | File | What it is |
 |---|---|
-| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 85 operations in 69 paths, 91 schemas, version 0.1.0 |
+| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 127 operations in 100 paths, 132 schemas, version 1.1.0 |
 | [`docs/`](docs/) | The rendered reference, published at <https://faxforagents.github.io/openapi/> |
 | [`docs/llms.txt`](docs/llms.txt) | The same contract written for a model |
 | [`scripts/curate.py`](scripts/curate.py) | Produces `openapi.yaml` from the server's own document |
@@ -24,7 +24,9 @@ https://raw.githubusercontent.com/faxforagents/openapi/main/openapi.yaml
 ```
 
 The server also serves its own document at `https://api.faxforagents.com/openapi.json`. That one
-includes operations a customer never calls. This repository is the curated, public form.
+includes operations a customer never calls: the admin routes, the carrier and payment webhook
+receivers, and the dashboard's cookie sign-in (magic links, passkeys, OAuth, sessions). This
+repository is the curated, public form: every operation an API key can call.
 
 ## Base URL and keys
 
@@ -43,14 +45,23 @@ can never carry `approval:decide`, `key:admin`, `policy:admin`, `agent:admin`, `
 ## The send flow
 
 ```
-POST /v1/documents            text, markdown or a completed upload  ->  doc_..., sha256, page_count
+POST /v1/documents            text, markdown, html or an upload     ->  doc_..., sha256, page_count
 POST /v1/fax-quotes           document_id + to                      ->  quote_..., amount_micro, expires_at
 POST /v1/faxes                quote_id (+ Idempotency-Key)          ->  fax_..., state queued
 GET  /v1/faxes/{fax_id}       poll                                  ->  state, evidence once delivered
 ```
 
-A PDF goes through `POST /v1/uploads`, a `PUT` of the bytes to the signed `upload_url`, `POST
-/v1/uploads/{id}/complete` with the sha256, then `POST /v1/documents` with the `upload_id`.
+A file goes through `POST /v1/uploads` with its `content_type`, a `PUT` of the bytes to the signed
+`upload_url`, `POST /v1/uploads/{id}/complete` with the sha256, then `POST /v1/documents` with the
+`upload_id`. The file is a PDF or an image: `application/pdf`, `image/png`, `image/jpeg` or
+`image/tiff`. An image becomes gray letter pages, every TIFF frame is a page. HTML passed as `html`
+is rendered by a headless browser with scripts off and no network: inline CSS and `data:` images
+print, external resources are counted as blocked. At most 2 MiB of HTML.
+
+Beyond the send flow the document covers keys, webhooks, events, billing, the sandbox, approvals,
+delegated policies, agent identities, the inbox, fax numbers (coverage, inventory, orders, porting,
+sender verification), extractions (OCR, fields, classification, summaries, saved schemas) and the
+organization with its members.
 
 ## States
 
