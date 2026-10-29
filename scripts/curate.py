@@ -302,6 +302,21 @@ HINTS: dict[str, str] = {
     "create_sandbox_scenario": "The destination table already covers every outcome. Use this to pin one for 24 hours.",
 }
 
+#: Operations that reach the carrier with a live key. On a production server with no carrier configured
+#: they answer 503 ``live_provider_unavailable`` (not retryable) before any approval is consumed or any
+#: hold is placed. Test keys reach the sandbox and are never refused this way. The server document does not
+#: declare the response, so it is added here. Read from ``provider_for`` call sites in the server (1.2.3).
+LIVE_CARRIER = {
+    "create_fax_quote",
+    "create_fax",
+    "cancel_fax",
+    "get_number_inventory",
+    "create_number_order",
+    "create_release_request",
+    "create_portability_check",
+    "create_port_order",
+}
+
 MUTATING = {"post", "patch", "delete", "put"}
 
 ERROR_SCHEMA = {
@@ -313,7 +328,7 @@ ERROR_SCHEMA = {
             "type": "object",
             "required": ["code", "message", "retryable", "correlation_id"],
             "properties": {
-                "code": {"type": "string", "description": "A stable code such as invalid_token, scope_missing, not_found, quote_expired, insufficient_balance, approval_required, rate_limited."},
+                "code": {"type": "string", "description": "A stable code such as invalid_token, scope_missing, not_found, quote_expired, insufficient_balance, approval_required, rate_limited, live_provider_unavailable."},
                 "message": {"type": "string", "description": "One sentence a person can act on."},
                 "retryable": {"type": "boolean"},
                 "correlation_id": {"type": "string", "description": "The X-Request-Id of the request. Quote it when you write to hello@faxforagents.com."},
@@ -398,6 +413,15 @@ def curate(src: dict[str, Any]) -> dict[str, Any]:
                     responses.setdefault("403", error_response(f"The key lacks the scope {scope} (scope_missing)."))
                 responses.setdefault("404", error_response("Not an id of this organization, or it was deleted (not_found)."))
                 responses.setdefault("429", error_response("Rate limit reached (rate_limited). Retry after the seconds in Retry-After."))
+                if oid in LIVE_CARRIER:
+                    responses.setdefault(
+                        "503",
+                        error_response(
+                            "Live keys only: this server has no carrier configured, so live quotes, sends and "
+                            "number operations are refused (live_provider_unavailable, retryable false). Nothing "
+                            "was held or consumed. Test keys keep working against the sandbox."
+                        ),
+                    )
             kept[method] = op
         if kept:
             paths[path] = kept

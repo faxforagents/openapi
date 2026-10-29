@@ -3,6 +3,21 @@
 All notable changes to the public OpenAPI document are listed here. The version is the API's
 `info.version` as served at `https://api.faxforagents.com/openapi.json`.
 
+## 1.2.3 (2026-10-29)
+
+API version 1.2.3, taken from the live server document. The same 100 paths, 127 operations and 132
+schemas as 1.1.0: the server's 1.2.x releases changed what happens behind the operations (a production
+server without a carrier refuses live operations, the readiness probe watches the HTML renderer) and
+the dashboard's sign-in, and none of that changes the shape of a public operation.
+
+- Every operation that reaches the carrier with a live key documents `503 live_provider_unavailable`:
+  `create_fax_quote`, `create_fax`, `cancel_fax`, `get_number_inventory`, `create_number_order`,
+  `create_release_request`, `create_portability_check` and `create_port_order`. A production server with
+  no carrier configured refuses them before any approval is consumed or any hold is placed, with
+  `retryable` false. Test keys reach the sandbox and are never refused this way. The server document
+  does not declare the response; `scripts/curate.py` adds it (`LIVE_CARRIER`).
+- `ErrorEnvelope.error.code` names `live_provider_unavailable` among the stable codes.
+
 ## 1.1.0 (2026-10-28)
 
 API version 1.1.0, taken from the live server document the same day. 100 paths, 127 operations,

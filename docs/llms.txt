@@ -12,7 +12,7 @@ A fax job is `queued`, `active`, `partial`, `failed`, `unknown` or `delivered`. 
 
 Errors are one envelope: `{"error": {"code", "message", "retryable", "correlation_id", "details"}}`. Rate limits answer 429 with `Retry-After`.
 
-Base URL: https://api.faxforagents.com. Version 1.1.0.
+Base URL: https://api.faxforagents.com. Version 1.2.3.
 Authentication: `Authorization: Bearer ffa_live_...` or `X-API-Key`. Test keys are `ffa_test_...` and reach the sandbox only.
 
 ## Documents
