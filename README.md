@@ -3,6 +3,7 @@
 The machine-readable contract of the [Fax for Agents](https://faxforagents.com) API. Fax for Agents is
 a fax API, a hosted MCP server and SDKs built so AI agents can send and receive faxes. It is made by
 JSB Holdings LLC and built by [Synapse](https://synapsereality.io/).
+The repository is mirrored on [GitLab](https://gitlab.com/faxforagents/openapi).
 
 | File | What it is |
 |---|---|
