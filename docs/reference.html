@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fax for Agents API reference</title>
-<meta name="description" content="A fax API, a hosted MCP server and SDKs built so AI agents can send and receive faxes. Every operation, parameter, schema, scope and error code of the Fax for Agents API, version 1.12.0, as plain HTML.">
+<meta name="description" content="A fax API, a hosted MCP server and SDKs built so AI agents can send and receive faxes. Every operation, parameter, schema, scope and error code of the Fax for Agents API, version 1.13.1, as plain HTML.">
 <link rel="canonical" href="https://faxforagents.github.io/openapi/reference.html">
 <style>
 :root{--paper:#F4F3EF;--surface:#FFFFFF;--sunken:#ECEAE4;--line:#D9D6CE;--ink:#1A1B1E;--ink-2:#4A4E55;
@@ -37,7 +37,7 @@ footer{color:var(--ink-3);font-size:14px;padding-block:32px;border-block-start:1
 <header><strong>Fax for Agents</strong><nav><a href="./">Interactive reference</a><a href="./reference.html" aria-current="page">Plain reference</a><a href="./llms.txt">llms.txt</a><a href="https://faxforagents.com/docs">Docs</a><a href="https://github.com/faxforagents/openapi">Source</a></nav></header>
 <main>
 <h1>Fax for Agents API reference</h1>
-<p class="meta">Version 1.12.0. Base URL <code>https://api.faxforagents.com</code>. 134 operations in 105 paths, 137 schemas. Generated from <a href="https://github.com/faxforagents/openapi/blob/main/openapi.yaml">openapi.yaml</a>, no JavaScript needed.</p>
+<p class="meta">Version 1.13.1. Base URL <code>https://api.faxforagents.com</code>. 134 operations in 105 paths, 137 schemas. Generated from <a href="https://github.com/faxforagents/openapi/blob/main/openapi.yaml">openapi.yaml</a>, no JavaScript needed.</p>
 <p>Fax for Agents is a fax API, a hosted MCP server and SDKs built so AI agents can send and receive faxes. It is made by JSB Holdings LLC.</p><p>Every call carries an API key: `Authorization: Bearer ffa_live_...` or `X-API-Key`. A test key (`ffa_test_...`) reaches the sandbox provider only: no carrier, no cost, deterministic outcomes chosen by the destination number. A live API key reaches the carrier and spends the prepaid wallet.</p><p>Money is an integer count of USD micro-units (39000 is $0.039), never a float. Timestamps are UTC. Ids are prefixed (`doc_`, `quote_`, `fax_`, `apr_`, `pol_`, `agent_`). Every mutating call accepts an `Idempotency-Key` header and a repeat within 24 hours returns the same resource with `Idempotent-Replayed: true`.</p><p>A fax job is `queued`, `active`, `partial`, `failed`, `unknown` or `delivered`. `delivered` is written only when the carrier&#x27;s evidence is stored on the attempt. `unknown` and `partial` never retransmit on their own.</p><p>Errors are one envelope: `{&quot;error&quot;: {&quot;code&quot;, &quot;message&quot;, &quot;retryable&quot;, &quot;correlation_id&quot;, &quot;details&quot;}}`. Rate limits answer 429 with `Retry-After`.</p>
 <h2>Authentication</h2>
 <p>Send the key as <code>Authorization: Bearer ffa_live_...</code>, or in <code>X-API-Key</code>. Every operation below names the scope the key needs. <code>any</code> is any valid key. <code>signed-url</code> is a link the API minted for you, no key.</p>

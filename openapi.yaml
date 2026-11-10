@@ -26,7 +26,7 @@ info:
   x-logo:
     url: https://faxforagents.com/brand/logo-512.png
     altText: Fax for Agents
-  version: 1.12.0
+  version: 1.13.1
 servers:
 - url: https://api.faxforagents.com
   description: Production (live and test keys)
