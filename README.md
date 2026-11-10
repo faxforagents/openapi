@@ -7,7 +7,7 @@ The repository is mirrored on [GitLab](https://gitlab.com/faxforagents/openapi).
 
 | File | What it is |
 |---|---|
-| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 134 operations in 105 paths, 137 schemas, version 1.13.1 |
+| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 134 operations in 105 paths, 137 schemas, version 1.13.2 |
 | [`docs/`](docs/) | The rendered reference, published at <https://faxforagents.github.io/openapi/> |
 | [`docs/llms.txt`](docs/llms.txt) | The same contract written for a model |
 | [`scripts/curate.py`](scripts/curate.py) | Produces `openapi.yaml` from the server's own document |
