@@ -7,7 +7,7 @@ The repository is mirrored on [GitLab](https://gitlab.com/faxforagents/openapi).
 
 | File | What it is |
 |---|---|
-| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 127 operations in 100 paths, 132 schemas, version 1.2.3 |
+| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 134 operations in 105 paths, 137 schemas, version 1.12.0 |
 | [`docs/`](docs/) | The rendered reference, published at <https://faxforagents.github.io/openapi/> |
 | [`docs/llms.txt`](docs/llms.txt) | The same contract written for a model |
 | [`scripts/curate.py`](scripts/curate.py) | Produces `openapi.yaml` from the server's own document |
@@ -27,7 +27,8 @@ https://raw.githubusercontent.com/faxforagents/openapi/main/openapi.yaml
 The server also serves its own document at `https://api.faxforagents.com/openapi.json`. That one
 includes operations a customer never calls: the admin routes, the carrier and payment webhook
 receivers, and the dashboard's cookie sign-in (magic links, passkeys, OAuth, sessions). This
-repository is the curated, public form: every operation an API key can call.
+repository is the curated, public form: every operation an API key can call. The few other operations
+left out are named in `EXCLUDED` in `scripts/curate.py`, each with its reason.
 
 ## Base URL and keys
 
@@ -61,8 +62,8 @@ print, external resources are counted as blocked. At most 2 MiB of HTML.
 
 Beyond the send flow the document covers keys, webhooks, events, billing, the sandbox, approvals,
 delegated policies, agent identities, the inbox, fax numbers (coverage, inventory, orders, porting,
-sender verification), extractions (OCR, fields, classification, summaries, saved schemas) and the
-organization with its members.
+sender verification), extractions (OCR, fields, classification, summaries, saved schemas), the
+organization with its members, the auto-send setting and connected apps.
 
 ## States
 

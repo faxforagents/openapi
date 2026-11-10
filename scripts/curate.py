@@ -7,6 +7,7 @@ the ``/webhooks/*`` receivers (Stripe, Resend). This script turns it into ``open
 
 - drops every operation tagged ``admin`` or ``auth`` (the dashboard's cookie sign-in: magic links,
   passkeys, OAuth, sessions, nothing an API key can call) and every path under ``/webhooks/``,
+- drops the operations named in ``EXCLUDED``, each with the reason it is not a customer call,
 - keeps every ``/v1`` customer operation with its operationId and its schemas,
 - gives the schemas whose names the server qualified by module (two ``Me``, two ``InboxItem``) the
   plain names the SDKs use (``RENAMES``),
@@ -101,6 +102,7 @@ TAGS = [
     {"name": "extractions", "description": "OCR, field extraction, classification and summaries of received faxes and documents, with saved schemas."},
     {"name": "organizations", "description": "The organizations the caller belongs to, the current one, data export and deletion requests."},
     {"name": "members", "description": "Members of the organization, their roles and invitations."},
+    {"name": "oauth", "description": "Connected apps: the OAuth grants of the organization and their revocation."},
 ]
 
 #: operationId -> the scope the key needs. "any" is any valid key. "signed-url" is a link the API minted.
@@ -131,6 +133,7 @@ SCOPES: dict[str, str] = {
     "list_fax_events": "fax:read",
     "list_fax_attempts": "fax:read",
     "get_fax_receipt": "fax:read",
+    "get_fax_receipt_pdf": "fax:read",
     "cancel_fax": "fax:cancel",
     "list_webhooks": "webhook:admin",
     "create_webhook": "webhook:admin",
@@ -197,6 +200,7 @@ SCOPES: dict[str, str] = {
     "get_coverage": "number:read",
     "get_number_inventory": "number:read",
     "create_number_order": "number:buy",
+    "list_number_orders": "number:read",
     "get_number_order": "number:read",
     "list_numbers": "number:read",
     "get_number": "number:read",
@@ -226,12 +230,32 @@ SCOPES: dict[str, str] = {
     "update_current_organization": "member:admin",
     "request_data_export": "org:admin",
     "request_data_deletion": "org:admin",
+    "download_export_archive": "signed-url",
+    "get_auto_send": "policy:read",
+    "put_auto_send": "org:admin",
     "list_members": "account:read",
     "update_member": "member:admin",
     "remove_member": "org:admin",
     "list_invitations": "member:admin",
     "create_invitation": "member:admin",
     "revoke_invitation": "member:admin",
+    "list_oauth_grants": "key:admin",
+    "revoke_oauth_grant": "key:admin",
+}
+
+#: operationId -> why the operation is not in the public document. These carry a customer tag, so
+#: ``DROPPED_TAGS`` does not catch them. An operation the server adds must land here or in ``SCOPES``.
+EXCLUDED: dict[str, str] = {
+    "get_integration_review": "dashboard session only: resolves the review link a hosted integration shows a person",
+    "get_oauth_authorization": "dashboard session only: the consent screen behind an OAuth consent URL",
+    "approve_oauth_authorization": "dashboard session only: a signed-in person allows an OAuth connection",
+    "deny_oauth_authorization": "dashboard session only: a signed-in person denies an OAuth connection",
+    "get_one_time_config": "no key: read by the public one-time send page, whose order routes are not in the API",
+}
+
+#: How long a signed link lives, where it is not the ten minutes of the document and inbox links.
+SIGNED_LINK_LIFETIME: dict[str, str] = {
+    "download_export_archive": "72 hours",
 }
 
 #: Scopes an agent's own key can never carry (the server refuses them at minting and on the route).
@@ -253,6 +277,13 @@ RENAMES: dict[str, str] = {
     "faxforagents__api__schemas__Me": "Me",
     "faxforagents__api__routes__inbox__InboxItem": "InboxItem",
     "faxforagents__api__schemas__InboxItem": "InboxItemSummary",
+}
+
+#: Wording of the server replaced wherever it appears in a schema. A dollar figure that is not on the
+#: price card reads as a price (scripts/truthcheck.sh), so an example amount is spelled out instead. The
+#: dollar sign is written by name here because truthcheck reads this file too.
+REWRITES: dict[str, str] = {
+    "(5000000 = \N{DOLLAR SIGN}5.00)": "(5000000 is five US dollars)",
 }
 
 #: Tags whose operations never appear in the public document.
@@ -300,6 +331,8 @@ HINTS: dict[str, str] = {
     ),
     "reset_sandbox_data": "Deletes the organization's test data and reseeds the test wallet. Test keys only.",
     "create_sandbox_scenario": "The destination table already covers every outcome. Use this to pin one for 24 hours.",
+    "put_auto_send": "Needs org:admin and policy:admin together. Never an agent key.",
+    "list_oauth_grants": "Answers 404 while OAuth connections are not enabled on the server.",
 }
 
 #: Operations that reach the carrier with a live key. On a production server with no carrier configured
@@ -381,6 +414,10 @@ def curate(src: dict[str, Any]) -> dict[str, Any]:
             oid = op.get("operationId")
             if not oid:
                 raise SystemExit(f"{method.upper()} {path} has no operationId")
+            if oid in EXCLUDED:
+                if oid in SCOPES:
+                    raise SystemExit(f"{oid} is both excluded and in the scope table of scripts/curate.py")
+                continue
             if oid not in SCOPES:
                 raise SystemExit(f"{oid} is not in the scope table of scripts/curate.py")
             op = copy.deepcopy(op)
@@ -405,7 +442,7 @@ def curate(src: dict[str, Any]) -> dict[str, Any]:
                 op["description"] = (
                     (op.get("description") or "")
                     + "\n\nNo API key: the `exp` and `sig` query values come from the signed URL the API minted. "
-                    "The link lives ten minutes."
+                    f"The link lives {SIGNED_LINK_LIFETIME.get(oid, 'ten minutes')}."
                 ).strip()
             else:
                 responses.setdefault("401", error_response("No key, or a key that was revoked or expired (invalid_token)."))
@@ -463,6 +500,24 @@ def curate(src: dict[str, Any]) -> dict[str, Any]:
         renamed[target] = copy.deepcopy(schemas[name])
     rename_refs(paths)
     rename_refs(renamed)
+
+    unmatched = set(REWRITES)
+
+    def rewrite(node: Any) -> Any:
+        if isinstance(node, dict):
+            return {k: rewrite(v) for k, v in node.items()}
+        if isinstance(node, list):
+            return [rewrite(v) for v in node]
+        if isinstance(node, str):
+            for old, new in REWRITES.items():
+                if old in node:
+                    unmatched.discard(old)
+                    node = node.replace(old, new)
+        return node
+
+    renamed = rewrite(renamed)
+    if unmatched:
+        raise SystemExit(f"REWRITES no longer match the server document: {sorted(unmatched)}")
 
     out: dict[str, Any] = {
         "openapi": "3.1.0",

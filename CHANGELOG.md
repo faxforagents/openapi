@@ -3,6 +3,27 @@
 All notable changes to the public OpenAPI document are listed here. The version is the API's
 `info.version` as served at `https://api.faxforagents.com/openapi.json`.
 
+## 1.12.0 (2026-11-10)
+
+API version 1.12.0, taken from the live server document. 105 paths, 134 operations, 137 schemas.
+
+- Seven operations join the document. `get_fax_receipt_pdf` returns the receipt as a one-page PDF.
+  `list_number_orders` lists number orders. `download_export_archive` serves an organization archive
+  from a signed link that lives 72 hours. `get_auto_send` and `put_auto_send` read and set the auto-send
+  setting for connected apps. `list_oauth_grants` and `revoke_oauth_grant` list and revoke connected apps.
+- New tag `oauth` for connected apps. New schemas `AutoSendSetting`, `AutoSendUpdate`, `Grant`,
+  `GrantList` and `NumberOrderList`.
+- Every mutating operation declares the `Idempotency-Key` header as a parameter.
+- `QuoteCreate`, `Quote` and `FaxJob` carry `quality`, `sender_name` and `delete_after_send`.
+  `ApiKey`, `ApiKeyCreate` and `ApiKeyWithSecret` carry `connected_app`. `Policy` carries `managed`.
+  `EffectivePolicies` carries `requires_human_approval`. `Capabilities` carries `extraction` and `one_time`.
+- `get_effective_policies` takes `key_id`, `agent_id` and `connection_id`. `list_faxes` filters by
+  `idempotency_key`.
+- `scripts/curate.py` gains `EXCLUDED`, the operations left out by name with the reason for each:
+  `get_integration_review`, `get_oauth_authorization`, `approve_oauth_authorization` and
+  `deny_oauth_authorization` need a dashboard session, and `get_one_time_config` serves the public
+  one-time send page. `SIGNED_LINK_LIFETIME` states a signed link's life where it is not ten minutes.
+
 ## 1.2.3 (2026-10-29)
 
 API version 1.2.3, taken from the live server document. The same 100 paths, 127 operations and 132

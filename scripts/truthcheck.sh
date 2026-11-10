@@ -6,7 +6,8 @@
 #   $0.039 per page sent, $0.019 per page received, $2 per number per month, $19 per month workspace.
 # Any other dollar amount in copy is stale or invented. Claims the product does not make: HIPAA, "the
 # first", "cheapest". Competitors are never named. CHANGELOG.md is exempt from the price rule (dated
-# entries quote the card as it stood), nothing else is.
+# entries quote the card as it stood). So is scripts/server-openapi.json, the server's document kept
+# verbatim as the curation source. Nothing else is.
 set -u
 cd "$(dirname "$0")/.." || exit 1
 
@@ -20,7 +21,7 @@ flag() {
 }
 
 # 1) Dollar amounts other than the four on the card.
-prices=$(printf '%s\n' "$FILES" | grep -v '^CHANGELOG\.md$' | xargs grep -noE '\$[0-9][0-9,]*(\.[0-9]+)?.?' 2>/dev/null \
+prices=$(printf '%s\n' "$FILES" | grep -vE '^CHANGELOG\.md$|^scripts/server-openapi\.json$' | xargs grep -noE '\$[0-9][0-9,]*(\.[0-9]+)?.?' 2>/dev/null \
     | grep -vE '\$[0-9]+[")}]$' \
     | sed -E 's/([0-9])[^0-9]$/\1/' \
     | grep -vE ':\$(0\.039|0\.019|2|2\.00|19|19\.00)$' || true)

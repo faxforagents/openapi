@@ -12,7 +12,7 @@ A fax job is `queued`, `active`, `partial`, `failed`, `unknown` or `delivered`. 
 
 Errors are one envelope: `{"error": {"code", "message", "retryable", "correlation_id", "details"}}`. Rate limits answer 429 with `Retry-After`.
 
-Base URL: https://api.faxforagents.com. Version 1.2.3.
+Base URL: https://api.faxforagents.com. Version 1.12.0.
 Authentication: `Authorization: Bearer ffa_live_...` or `X-API-Key`. Test keys are `ffa_test_...` and reach the sandbox only.
 
 ## Documents
@@ -31,7 +31,7 @@ Who the key is and the keys of the organization.
 - `GET /v1/me` Who am I. Scope `any`.
 - `GET /v1/api-keys` List API keys (metadata only). Scope `key:admin` (never an agent key).
 - `POST /v1/api-keys` Create an API key (the secret is shown once). Scope `key:admin` (Idempotency-Key, never an agent key).
-- `POST /v1/api-keys/{key_id}/rotate` Rotate a key: a new secret, the old one works for 24 more hours. Scope `key:admin` (Idempotency-Key, never an agent key).
+- `POST /v1/api-keys/{key_id}/rotate` Rotate an API key and preserve its expiry. Scope `key:admin` (Idempotency-Key, never an agent key).
 - `DELETE /v1/api-keys/{key_id}` Revoke a key. Scope `key:admin` (Idempotency-Key, never an agent key).
 
 ### documents
@@ -74,6 +74,7 @@ Send a quoted fax, read its state, its events, its attempts and its receipt.
 - `GET /v1/faxes/{fax_id}/events` Ordered events of one fax. Scope `fax:read`.
 - `GET /v1/faxes/{fax_id}/attempts` Attempt history. Scope `fax:read`.
 - `GET /v1/faxes/{fax_id}/receipt` Delivery evidence as a receipt (JSON). Scope `fax:read`.
+- `GET /v1/faxes/{fax_id}/receipt.pdf` The same receipt as a one-page PDF. Scope `fax:read`.
 - `POST /v1/faxes/{fax_id}/cancel` Cancel if still possible (best effort once sending). Scope `fax:cancel` (Idempotency-Key).
   Works while queued. Once sending it is best effort. Pages already sent are never recalled.
 
@@ -107,8 +108,8 @@ Balance, ledger, top-ups, budgets, usage, invoices and the workspace subscriptio
 - `POST /v1/topup-sessions` Open a hosted Checkout to fund the live wallet (10 to 1000 USD). Scope `billing:write` (Idempotency-Key, never an agent key).
 - `GET /v1/topup-sessions` Top-up sessions, newest first. Scope `billing:read`.
 - `GET /v1/topup-sessions/{topup_session_id}` Read a top-up session. Scope `billing:read`.
-- `GET /v1/auto-topups` Auto top-up settings. Scope `billing:read`.
 - `POST /v1/auto-topups` Opt in to auto top-up (threshold, amount, daily cap). The card is saved at the first payment. Scope `billing:write` (Idempotency-Key, never an agent key).
+- `GET /v1/auto-topups` Auto top-up settings. Scope `billing:read`.
 - `DELETE /v1/auto-topups/{auto_topup_id}` Turn auto top-up off. Scope `billing:write` (Idempotency-Key, never an agent key).
 - `GET /v1/budgets` Spending caps of this environment. Scope `billing:read`.
 - `POST /v1/budgets` Create a daily or monthly cap for the organization, a project or an agent. Scope `billing:write` (Idempotency-Key, never an agent key).
@@ -149,7 +150,7 @@ Human approval of a quoted send, bound to that exact send.
   Grants nothing. A person decides with approval:decide, never the key that asked.
 - `GET /v1/approval-requests` Approval requests, pending first. Scope `approval:read`.
 - `GET /v1/approval-requests/{approval_id}` Read one request. Scope `approval:read`.
-- `POST /v1/approval-requests/{approval_id}/approve` Approve the bound quote (a human with approval:decide, never the requester). Scope `approval:decide` (Idempotency-Key, never an agent key).
+- `POST /v1/approval-requests/{approval_id}/approve` Approve the bound quote (approval:decide, fresh session or independent API credential). Scope `approval:decide` (Idempotency-Key, never an agent key).
 - `POST /v1/approval-requests/{approval_id}/reject` Reject with a reason. Scope `approval:decide` (Idempotency-Key, never an agent key).
 - `POST /v1/approvals/{approval_id}/revoke` Revoke an approval nobody has used yet. Scope `approval:decide` (Idempotency-Key, never an agent key).
 
@@ -160,6 +161,9 @@ Delegated policies evaluated on the server, never from prompt text.
 - `GET /v1/policies` List the organization's policies. Scope `policy:read`.
 - `POST /v1/policies` Create a delegated policy (version 1). Scope `policy:admin` (Idempotency-Key, never an agent key).
 - `GET /v1/policies/effective` What the calling API key is allowed to do alone, and whether a human is needed otherwise. Scope `policy:read`.
+- `GET /v1/organizations/current/auto-send` Read the auto-send setting for connected apps in this environment. Scope `policy:read`.
+- `PUT /v1/organizations/current/auto-send` Let connected apps send without asking, inside two limits (owner). Scope `org:admin` (Idempotency-Key, never an agent key).
+  Needs org:admin and policy:admin together. Never an agent key.
 - `GET /v1/policies/{policy_id}` Read a policy (its current version). Scope `policy:read`.
 - `PATCH /v1/policies/{policy_id}` Change a policy: a new immutable version. Scope `policy:admin` (Idempotency-Key, never an agent key).
 - `GET /v1/policies/{policy_id}/versions` Every version, oldest first. Scope `policy:read`.
@@ -197,14 +201,15 @@ Coverage, inventory, number orders, your numbers, porting and sender verificatio
 - `GET /v1/number-inventory` Fax-capable numbers for sale. Scope `number:read`.
 - `POST /v1/number-orders` Buy a number (the first month is held now, charged on activation). Scope `number:buy` (Idempotency-Key, never an agent key).
   Spends money: the first month is held now and charged on activation. Never an agent key.
+- `GET /v1/number-orders` List your number orders. Scope `number:read`.
 - `GET /v1/number-orders/{order_id}` Read a number order. Scope `number:read`.
 - `GET /v1/numbers` Your numbers. Scope `number:read`.
 - `GET /v1/numbers/{number_id}` One number. Scope `number:read`.
 - `PATCH /v1/numbers/{number_id}` Label and inbound route of a number. Scope `number:buy` (Idempotency-Key, never an agent key).
 - `POST /v1/numbers/{number_id}/release-requests` Release a number (confirm with the number itself. 30-day quarantine follows). Scope `number:buy` (Idempotency-Key, never an agent key).
 - `POST /v1/portability-checks` Can these numbers port in. Scope `number:read` (Idempotency-Key).
-- `GET /v1/port-orders` Port orders and port-out requests. Scope `number:read`.
 - `POST /v1/port-orders` Request a port-in (handled with you). Scope `number:buy` (Idempotency-Key, never an agent key).
+- `GET /v1/port-orders` Port orders and port-out requests. Scope `number:read`.
 - `GET /v1/port-orders/{port_id}` One port order. Scope `number:read`.
 - `POST /v1/port-out-requests` Note a port-out of one of your numbers. Scope `number:buy` (Idempotency-Key, never an agent key).
 - `POST /v1/sender-verifications` Verify a number of yours as a sender (only numbers you own). Scope `number:buy` (Idempotency-Key, never an agent key).
@@ -237,6 +242,7 @@ The organizations the caller belongs to, the current one, data export and deleti
 - `PATCH /v1/organizations/current` Rename the organization. Scope `member:admin` (Idempotency-Key, never an agent key).
 - `POST /v1/organizations/current/export-requests` Ask for an export of the organization's data (owner). Scope `org:admin` (Idempotency-Key, never an agent key).
 - `POST /v1/organizations/current/deletion-requests` Ask for the organization and its data to be deleted (owner). Scope `org:admin` (Idempotency-Key, never an agent key).
+- `GET /v1/organization/export-archives/{token}` Download an organization archive with a signed link valid for 72 hours. Scope `signed-url`.
 
 ### members
 
@@ -248,6 +254,14 @@ Members of the organization, their roles and invitations.
 - `GET /v1/invitations` Open invitations. Scope `member:admin` (never an agent key).
 - `POST /v1/invitations` Invite someone by email (a link that works for 7 days). Scope `member:admin` (Idempotency-Key, never an agent key).
 - `DELETE /v1/invitations/{invitation_id}` Withdraw an invitation. Scope `member:admin` (Idempotency-Key, never an agent key).
+
+### oauth
+
+Connected apps: the OAuth grants of the organization and their revocation.
+
+- `GET /v1/oauth/grants` Your connected apps in this organization. Scope `key:admin` (never an agent key).
+  Answers 404 while OAuth connections are not enabled on the server.
+- `DELETE /v1/oauth/grants/{grant_id}` Revoke a connected app. Scope `key:admin` (Idempotency-Key, never an agent key).
 
 ## States
 
