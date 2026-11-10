@@ -3,6 +3,12 @@
 All notable changes to the public OpenAPI document are listed here. The version is the API's
 `info.version` as served at `https://api.faxforagents.com/openapi.json`.
 
+## 1.13.1 (2026-11-10)
+
+API version 1.13.1, taken from the live server document. The same 105 paths, 134 operations and 137
+schemas as 1.12.0. Only `info.version` changes: no operation, parameter, schema or description differs.
+The server's 1.13.x releases changed nothing in the shape of a public operation.
+
 ## 1.12.0 (2026-11-10)
 
 API version 1.12.0, taken from the live server document. 105 paths, 134 operations, 137 schemas.
