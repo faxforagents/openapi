@@ -32,7 +32,7 @@ repository holds the public OpenAPI document of the API.
 
 | File | What it is |
 |---|---|
-| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 145 operations in 115 paths, 152 schemas, version 1.17.2 |
+| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 145 operations in 115 paths, 151 schemas, version 1.18.0 |
 | [`docs/`](docs/) | The rendered reference, published at <https://faxforagents.github.io/openapi/> |
 | [`docs/llms.txt`](docs/llms.txt) | The same contract written for a model |
 | [`scripts/curate.py`](scripts/curate.py) | Produces `openapi.yaml` from the server's own document |
@@ -63,6 +63,12 @@ Base URL `https://api.faxforagents.com`. Send the key as `Authorization: Bearer 
 
 A test key (`ffa_test_...`) reaches the sandbox provider only. No carrier, no cost, nothing leaves the
 box. A live key (`ffa_live_...`) reaches the carrier and spends the prepaid wallet.
+
+Every operation states its `security`: an API key in `bearerAuth` or `apiKeyHeader`, the `orderToken` of
+a one-time order, or a `signedUrl` the API handed out. Five operations of the one-time send need no
+credential. `x-required-scope` names the scope the key needs. The server's document also names the
+dashboard session as a credential. That session and the operations that take it alone stay out of
+this document.
 
 Every operation carries an `x-llm` block naming the scope the call needs, whether the call mutates and
 whether it honours `Idempotency-Key`. A key is minted with the scopes it needs. An agent's own API key
@@ -175,8 +181,13 @@ One envelope on every error.
 `402 insufficient_balance` on `POST /v1/faxes` has its own schema, `InsufficientBalance`: `details`
 carries `available_micro`, `needed_micro` and `top_up_url`, the page where a person adds funds. It
 carries `one_time_offer` too when the same send can be paid by card. `413 payload_too_large` answers a
-request body over the limit of its route: 1 MB by default and 4 MB on `POST /v1/documents`. The bytes
-of an upload and the one-time create form have their own larger limits. `429` carries `Retry-After`.
+request body over the limit of its route: 1 MiB by default and 4 MiB on `POST /v1/documents`. The bytes
+of an upload and the one-time create form have their own larger limits. Every published limit is in
+one table at <https://faxforagents.com/docs/limits/>. `429` carries `Retry-After`.
+
+The errors an operation can answer are declared on it. The shared ones are in `components.responses`:
+401, 402, 403, 404, 409, 413, 422, 429 and 503, each the envelope above. A field that fails validation
+answers 422 `invalid_request` in the same envelope.
 Repeat a mutating call with the same `Idempotency-Key` and the same resource comes back with
 `Idempotent-Replayed: true`.
 
@@ -191,7 +202,9 @@ sh scripts/truthcheck.sh              # the facts CI pins
 ```
 
 CI fails when `openapi.yaml`, the reference or `llms.txt` is stale. It fails when an operation lacks an
-`operationId` or an `x-llm.scope`. It fails when a tracked file states a price that is not on the card.
+`operationId` or an `x-llm.scope`. It fails when a tracked file states a price that is not on the card,
+and when the dashboard session reaches the document. `scripts/curate.py` refuses a server document
+whose credentials or scopes differ from its own tables.
 
 ## Licence
 

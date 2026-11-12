@@ -13,8 +13,12 @@ the ``/webhooks/*`` receivers (Stripe, Resend). This script turns it into ``open
 - keeps every ``/v1`` customer operation with its operationId and its schemas,
 - gives the schemas whose names the server qualified by module (two ``Me``, two ``InboxItem``) the
   plain names the SDKs use (``RENAMES``),
-- adds ``servers``, ``info`` (contact, terms, privacy), the security schemes and the tags,
-- adds the error responses the server answers and does not declare (``DOCUMENTED_ERRORS``),
+- adds ``servers``, ``info`` (contact, terms, privacy) and the tags,
+- keeps the security the server declares on each operation, without the dashboard session
+  (``sessionCookie``), and fails when an operation that takes the session alone is not excluded or when
+  the server and the tables below disagree about a credential or a scope,
+- keeps the shared error responses of the server (``components.responses``) and names the codes an
+  operation answers where the shared text is too general (``DOCUMENTED_ERRORS``),
 - adds an ``x-llm`` block on every operation naming the scope the key needs, whether the call
   mutates and whether it honours ``Idempotency-Key``, so a model reading the document knows what a
   call costs before it makes it.
@@ -97,7 +101,23 @@ SECURITY_SCHEMES = {
             "accepted as the query parameter `t`."
         ),
     },
+    "signedUrl": {
+        "type": "apiKey",
+        "in": "query",
+        "name": "sig",
+        "description": (
+            "A short-lived signed URL the API handed out, with `exp` and `sig` in the query. Use the URL as "
+            "it was given. No API key is sent with it."
+        ),
+    },
 }
+
+#: The dashboard's signed-in session. The server names it as one more way to call most operations. The
+#: public document is for API keys, so the scheme and every requirement that names it stay out, and an
+#: operation that takes the session alone must be in ``EXCLUDED`` or carry a dropped tag.
+SESSION_SCHEME = "sessionCookie"
+
+KEY_SECURITY: list[dict[str, list[str]]] = [{"bearerAuth": []}, {"apiKeyHeader": []}]
 
 TAGS = [
     {"name": "identity", "description": "Who the key is and the keys of the organization."},
@@ -527,6 +547,11 @@ DOCUMENTED_ERRORS: dict[str, dict[str, str]] = {
         ),
     },
     "create_one_time_order": {
+        "429": (
+            "Rate limit reached (rate_limited). details.cap names the limit: email, destination or address "
+            "for a daily limit of the one-time send, upload_queue when too many files are being read at "
+            "once. Retry after the seconds in Retry-After."
+        ),
         "403": "A key was sent and lacks fax:send (scope_missing), or the destination is blocked (blocked_destination).",
         "422": (
             "The form was refused (invalid_request), the number is not a fax destination (invalid_destination), "
@@ -562,24 +587,24 @@ DOCUMENTED_ERRORS: dict[str, dict[str, str]] = {
 ONE_TIME_404 = "No such order. A wrong token, another organization's key and an unknown id all answer this (not_found)."
 ONE_TIME_503 = "One-time sends are switched off on this server (one_time_unavailable). Nothing was created or charged."
 
-ERROR_SCHEMA = {
-    "title": "ErrorEnvelope",
-    "type": "object",
-    "required": ["error"],
-    "properties": {
-        "error": {
-            "type": "object",
-            "required": ["code", "message", "retryable", "correlation_id"],
-            "properties": {
-                "code": {"type": "string", "description": "A stable code such as invalid_token, scope_missing, not_found, quote_expired, insufficient_balance, approval_required, rate_limited, live_provider_unavailable, one_time_unavailable."},
-                "message": {"type": "string", "description": "One sentence a person can act on."},
-                "retryable": {"type": "boolean"},
-                "correlation_id": {"type": "string", "description": "The X-Request-Id of the request. Quote it when you write to hello@faxforagents.com."},
-                "details": {"type": "object", "additionalProperties": True, "description": "Code-specific fields, for example details.scope on scope_missing."},
-            },
-        }
-    },
+#: The server declares ``ErrorEnvelope`` and ``ErrorBody`` (1.18.0). These descriptions are added to the
+#: fields of ``ErrorBody``.
+ERROR_FIELDS: dict[str, str] = {
+    "code": "A stable code such as invalid_token, scope_missing, not_found, quote_expired, insufficient_balance, approval_required, rate_limited, live_provider_unavailable, one_time_unavailable.",
+    "message": "One sentence a person can act on.",
+    "correlation_id": "The X-Request-Id of the request. Quote it when you write to hello@faxforagents.com.",
+    "details": "Code-specific fields, for example details.scope on scope_missing.",
 }
+
+
+def public_security(oid: str, declared: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The security of the server without the alternatives that need the dashboard session."""
+    public = [alt for alt in declared if SESSION_SCHEME not in alt]
+    if declared and not public:
+        raise SystemExit(
+            f"{oid} takes the dashboard session only: name it in EXCLUDED of scripts/curate.py with its reason"
+        )
+    return public
 
 
 def error_response(description: str) -> dict[str, Any]:
@@ -628,6 +653,9 @@ def curate(src: dict[str, Any]) -> dict[str, Any]:
                 if oid in SCOPES:
                     raise SystemExit(f"{oid} is both excluded and in the scope table of scripts/curate.py")
                 continue
+            if "security" not in op:
+                raise SystemExit(f"{oid} declares no security in the server document")
+            declared = public_security(oid, op["security"])
             if oid not in SCOPES:
                 raise SystemExit(f"{oid} is not in the scope table of scripts/curate.py")
             op = copy.deepcopy(op)
@@ -635,6 +663,13 @@ def curate(src: dict[str, Any]) -> dict[str, Any]:
             if op.get("description"):
                 op["description"] = sentences(op["description"])
             scope = SCOPES[oid]
+            required = op.get("x-required-scope")
+            if required is None:
+                # The server checks a few scopes inside the route and declares none: the table is the record.
+                if scope not in ("any", "none", "signed-url"):
+                    op["x-required-scope"] = scope
+            elif required != scope:
+                raise SystemExit(f"{oid}: the server asks for {required}, the scope table says {scope}")
             mutating = method in MUTATING and oid not in READS
             x_llm: dict[str, Any] = {
                 "scope": scope,
@@ -656,21 +691,21 @@ def curate(src: dict[str, Any]) -> dict[str, Any]:
             if oid in ONE_TIME_SWITCHED:
                 responses.setdefault("503", error_response(ONE_TIME_503))
             if scope == "none":
-                op["security"] = []
+                security: list[dict[str, Any]] = []
                 x_llm["idempotency_key"] = False
                 responses.setdefault("429", error_response("Rate limit reached (rate_limited). Retry after the seconds in Retry-After."))
                 op["description"] = ((op.get("description") or "") + "\n\nNo API key is needed.").strip()
             elif how is not None:
                 if how == "optional":
-                    op["security"] = [{}, {"bearerAuth": []}, {"apiKeyHeader": []}]
+                    security = [{}, *KEY_SECURITY]
                     x_llm["key_optional"] = True
                 else:
-                    op["security"] = [{"bearerAuth": []}, {"apiKeyHeader": []}, {"orderToken": []}]
+                    security = [*KEY_SECURITY, {"orderToken": []}]
                     x_llm["order_token"] = True
                     responses.setdefault("404", error_response(ONE_TIME_404))
                 responses.setdefault("429", error_response("Rate limit reached (rate_limited). Retry after the seconds in Retry-After."))
             elif scope == "signed-url":
-                op["security"] = []
+                security = [{"signedUrl": []}]
                 responses.setdefault("404", error_response("No such resource, or the signed link expired."))
                 op["description"] = (
                     (op.get("description") or "")
@@ -678,6 +713,7 @@ def curate(src: dict[str, Any]) -> dict[str, Any]:
                     f"The link lives {SIGNED_LINK_LIFETIME.get(oid, 'ten minutes')}."
                 ).strip()
             else:
+                security = list(KEY_SECURITY)
                 responses.setdefault("401", error_response("No key, or a key that was revoked or expired (invalid_token)."))
                 if scope != "any":
                     responses.setdefault("403", error_response(f"The key lacks the scope {scope} (scope_missing)."))
@@ -692,12 +728,37 @@ def curate(src: dict[str, Any]) -> dict[str, Any]:
                             "was held or consumed. Test keys keep working against the sandbox."
                         ),
                     )
+            if declared != security:
+                raise SystemExit(
+                    f"{oid}: the server declares security {declared}, the tables of scripts/curate.py say {security}"
+                )
+            op["security"] = security
             kept[method] = op
         if kept:
             paths[path] = kept
 
+    declared_schemes = set(src.get("components", {}).get("securitySchemes", {}))
+    unknown = declared_schemes - set(SECURITY_SCHEMES) - {SESSION_SCHEME}
+    if unknown:
+        raise SystemExit(f"the server declares security schemes scripts/curate.py does not know: {sorted(unknown)}")
+
+    # The shared error responses the kept operations point at.
+    shared = src.get("components", {}).get("responses", {})
+    responses_used: dict[str, Any] = {}
+    for ops in paths.values():
+        for op in ops.values():
+            for resp in op["responses"].values():
+                ref = resp.get("$ref", "")
+                if ref.startswith("#/components/responses/"):
+                    name = ref.rsplit("/", 1)[1]
+                    if name not in shared:
+                        raise SystemExit(f"{op['operationId']} points at the response {name}, which the server does not declare")
+                    responses_used[name] = copy.deepcopy(shared[name])
+    responses_used = {name: responses_used[name] for name in shared if name in responses_used}
+
     used: set[str] = set()
     collect_refs(paths, used)
+    collect_refs(responses_used, used)
     schemas = src.get("components", {}).get("schemas", {})
     marker_schema, marker_field = ONE_TIME_OFFER_MARKER
     with_offer = marker_field in schemas.get(marker_schema, {}).get("properties", {})
@@ -728,7 +789,7 @@ def curate(src: dict[str, Any]) -> dict[str, Any]:
 
     renamed: dict[str, Any] = {}
     for name in sorted(used):
-        if name in ("ErrorEnvelope", "InsufficientBalance"):
+        if name == "InsufficientBalance":
             continue
         target = RENAMES.get(name, name)
         if target in renamed or (target != name and target in used):
@@ -736,6 +797,11 @@ def curate(src: dict[str, Any]) -> dict[str, Any]:
         renamed[target] = copy.deepcopy(schemas[name])
     rename_refs(paths)
     rename_refs(renamed)
+    for field, text in ERROR_FIELDS.items():
+        try:
+            renamed["ErrorBody"]["properties"][field]["description"] = text
+        except KeyError:
+            raise SystemExit(f"the server's ErrorBody has no field {field}") from None
 
     unmatched = set(REWRITES)
 
@@ -760,13 +826,13 @@ def curate(src: dict[str, Any]) -> dict[str, Any]:
         "info": {**INFO, "version": src["info"]["version"]},
         "servers": SERVERS,
         "tags": TAGS,
-        "security": [{"bearerAuth": []}, {"apiKeyHeader": []}],
+        "security": KEY_SECURITY,
         "paths": paths,
         "components": {
             "securitySchemes": SECURITY_SCHEMES,
+            "responses": responses_used,
             "schemas": {
                 **{k: renamed[k] for k in sorted(renamed)},
-                "ErrorEnvelope": ERROR_SCHEMA,
                 "InsufficientBalance": insufficient_balance_schema(with_offer, with_top_up),
             },
         },
@@ -804,7 +870,9 @@ def strip_source(src: dict[str, Any]) -> dict[str, Any]:
 
 
 class Dumper(yaml.SafeDumper):
-    pass
+    def ignore_aliases(self, data: Any) -> bool:
+        """Write a repeated value out each time: no anchors in the public document."""
+        return True
 
 
 def _str(dumper: yaml.SafeDumper, value: str) -> yaml.Node:

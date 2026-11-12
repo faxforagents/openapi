@@ -70,6 +70,11 @@ for f in $(printf '%s\n' "$FILES" | xargs grep -lE '\$(2\.49|0\.49)' 2>/dev/null
     fi
 done
 
+# 7) The public document is for API keys: the dashboard session is not a way in that it names.
+if grep -nE 'sessionCookie|__Host-ffa_session' openapi.yaml docs/reference.html docs/llms.txt 2>/dev/null; then
+    flag "the dashboard session scheme reached the public document (scripts/curate.py SESSION_SCHEME)"
+fi
+
 if [ "$fail" -eq 0 ]; then
     echo "truthcheck: OK"
 fi

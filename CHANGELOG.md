@@ -3,6 +3,34 @@
 All notable changes to the public OpenAPI document are listed here. The version is the API's
 `info.version` as served at `https://api.faxforagents.com/openapi.json`.
 
+## 1.18.0 (2026-11-12)
+
+API version 1.18.0, curated from the server document at that release. 115 paths, 145 operations and
+151 schemas. No path, operation id, request body or success response changed.
+
+- The server now declares how each operation is authorized, and this document follows it. Every
+  operation has its own `security`. 130 take an API key (`bearerAuth` or `apiKeyHeader`). 4 take a key
+  or the `orderToken` of a one-time order. 1 takes a key or nothing. 4 take nothing. 6 take a
+  `signedUrl`.
+- New security scheme `signedUrl`: `sig` in the query of a link the API handed out. The six content
+  links carried an empty `security` before.
+- New extension `x-required-scope` on 131 operations, the scope the key needs. It agrees with
+  `x-llm.scope`. The two connected-app operations get it from this repository's scope table, because
+  the server checks `key:admin` inside the route.
+- Errors are declared as shared responses in `components.responses`: `Unauthorized` (401),
+  `PaymentRequired` (402), `Forbidden` (403), `NotFound` (404), `Conflict` (409), `PayloadTooLarge`
+  (413), `UnprocessableContent` (422), `TooManyRequests` (429) and `ServiceUnavailable` (503). Each is
+  the error envelope. Operations now name 409, 413, 402 and 503 where they answer them.
+- Removed schemas: `HTTPValidationError` and `ValidationError`. The server never sent that shape. A
+  422 is the error envelope with `invalid_request`.
+- `ErrorEnvelope` is now the server's own schema and points at the new schema `ErrorBody`.
+  `correlation_id` may be null and is no longer listed as required.
+- `create_one_time_order` documents its 429: `details.cap` names the limit, and `upload_queue` means
+  too many files are being read at once.
+- Left out, as before: the dashboard session. The server names a `sessionCookie` scheme and 16
+  operations that take it alone. None of them is in this document. `scripts/curate.py` now fails when
+  such an operation is not excluded, and when the server's credentials or scopes differ from its tables.
+
 ## 1.17.2 (2026-11-12)
 
 API version 1.17.2, curated from the server document at that release. 115 paths, 145 operations and
