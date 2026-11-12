@@ -3,6 +3,19 @@
 All notable changes to the public OpenAPI document are listed here. The version is the API's
 `info.version` as served at `https://api.faxforagents.com/openapi.json`.
 
+## 1.17.2 (2026-11-12)
+
+API version 1.17.2, curated from the server document at that release. 115 paths, 145 operations and
+152 schemas, the same counts as 1.17.0. No path, operation, schema or field was added or removed.
+
+- `sender_name` on the send body has a new description. It is the name that identifies the sender.
+  The carrier gets it as the caller name for its header line. Omit it and the organization's name is
+  used. Until 1.17.0 an omitted name showed the number alone.
+- Not visible in a schema: a fax without a cover sheet prints one line at the top of page one. The
+  line gives the sender, the sending number and the time in UTC. The page count does not change. A
+  fax with a cover sheet gets no line.
+- 1.17.1 changed no path and no schema. It moved the price card to launch-v3, effective 2026-11-12.
+
 ## 1.17.0 (2026-11-12)
 
 API version 1.17.0, curated from the server document at that release. 115 paths, 145 operations and

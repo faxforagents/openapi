@@ -26,7 +26,7 @@ info:
   x-logo:
     url: https://faxforagents.com/brand/logo-512.png
     altText: Fax for Agents
-  version: 1.17.0
+  version: 1.17.2
 servers:
 - url: https://api.faxforagents.com
   description: Production (live and test keys)
@@ -14034,8 +14034,10 @@ components:
             maxLength: 128
           - type: 'null'
           title: Sender Name
-          description: The station name the carrier prints in the fax header, next to the sending number. Letters,
-            digits, spaces and - _ ~ ! . + only, at most 128 characters. Omit to show the number alone.
+          description: The name that identifies the sender. The carrier gets it as the caller name for its header
+            line. A fax without a cover sheet prints it in one line at the top of page one. The line also gives
+            the sending number and the time in UTC. Letters, digits, spaces and - _ ~ ! . + only, at most 128 characters.
+            Omit to use the organization's name.
         delete_after_send:
           type: boolean
           title: Delete After Send
