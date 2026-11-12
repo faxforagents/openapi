@@ -263,6 +263,7 @@ SCOPES: dict[str, str] = {
     "create_one_time_order_from_quote": "fax:send",
     "list_one_time_orders": "fax:read",
     "get_one_time_order_by_token": "none",
+    "read_one_time_order_by_token": "none",
     "get_one_time_order": "fax:read",
     "get_one_time_receipt_pdf": "fax:read",
     "create_one_time_checkout": "fax:send",
@@ -433,6 +434,10 @@ LIVE_CARRIER = {
 
 MUTATING = {"post", "patch", "delete", "put"}
 
+#: Operations sent with a mutating method that change nothing. ``read_one_time_order_by_token`` is a
+#: read that takes the confirmation token in the body so that it stays out of the address (1.17.0).
+READS = {"read_one_time_order_by_token"}
+
 #: The pointer to the card path that a wallet refusal carries on servers that send it. The server adds it
 #: with the change that gives ``OneTimeOrder`` its ``status_url``, so ``curate`` documents it only when the
 #: source document has that field: the public document never describes a field the server does not send.
@@ -461,7 +466,16 @@ ONE_TIME_OFFER_SCHEMA: dict[str, Any] = {
 }
 
 
-def insufficient_balance_schema(with_offer: bool) -> dict[str, Any]:
+#: Where a person funds the wallet. The server names the page on a wallet refusal with the change that
+#: gives ``Balance`` its ``top_up_url`` (1.17.0), so ``curate`` documents it only when the source has it.
+TOP_UP_MARKER = ("Balance", "top_up_url")
+TOP_UP_URL_SCHEMA: dict[str, Any] = {
+    "type": "string",
+    "description": "The dashboard page where a person adds funds to the wallet. A key cannot top up.",
+}
+
+
+def insufficient_balance_schema(with_offer: bool, with_top_up: bool = False) -> dict[str, Any]:
     details: dict[str, Any] = {
         "type": "object",
         "additionalProperties": True,
@@ -471,6 +485,8 @@ def insufficient_balance_schema(with_offer: bool) -> dict[str, Any]:
             "needed_micro": {"type": "integer", "description": "What this fax holds."},
         },
     }
+    if with_top_up:
+        details["properties"]["top_up_url"] = TOP_UP_URL_SCHEMA
     if with_offer:
         details["properties"]["one_time_offer"] = ONE_TIME_OFFER_SCHEMA
     return {
@@ -495,10 +511,14 @@ def insufficient_balance_schema(with_offer: bool) -> dict[str, Any]:
 
 
 #: operationId -> status -> the description of an error the server answers there and does not declare in
-#: its own document. Read from the server's routes and services (1.16.1). The codes are stable.
+#: its own document. Read from the server's routes and services (1.17.0). The codes are stable.
 DOCUMENTED_ERRORS: dict[str, dict[str, str]] = {
     "create_fax": {
-        "402": "The wallet does not cover this fax (insufficient_balance). details names available_micro and needed_micro. Nothing was held.",
+        "402": (
+            "The wallet does not cover this fax (insufficient_balance). details names available_micro and "
+            "needed_micro, top_up_url where a person adds funds, and one_time_offer when the send can be paid "
+            "by card instead. Nothing was held."
+        ),
         "403": "The key lacks the scope fax:send (scope_missing), or the send needs a person's approval (approval_required).",
         "409": (
             "The quote expired (quote_expired), already created a fax (quote_consumed), belongs to a one-time "
@@ -519,6 +539,9 @@ DOCUMENTED_ERRORS: dict[str, dict[str, str]] = {
         "409": "The quote expired (quote_expired), or the document changed since the quote (document_hash_mismatch).",
     },
     "get_one_time_order_by_token": {
+        "404": "The confirmation link is not valid (link_invalid).",
+    },
+    "read_one_time_order_by_token": {
         "404": "The confirmation link is not valid (link_invalid).",
     },
     "get_one_time_receipt_pdf": {
@@ -612,7 +635,7 @@ def curate(src: dict[str, Any]) -> dict[str, Any]:
             if op.get("description"):
                 op["description"] = sentences(op["description"])
             scope = SCOPES[oid]
-            mutating = method in MUTATING
+            mutating = method in MUTATING and oid not in READS
             x_llm: dict[str, Any] = {
                 "scope": scope,
                 "mutating": mutating,
@@ -678,6 +701,7 @@ def curate(src: dict[str, Any]) -> dict[str, Any]:
     schemas = src.get("components", {}).get("schemas", {})
     marker_schema, marker_field = ONE_TIME_OFFER_MARKER
     with_offer = marker_field in schemas.get(marker_schema, {}).get("properties", {})
+    with_top_up = TOP_UP_MARKER[1] in schemas.get(TOP_UP_MARKER[0], {}).get("properties", {})
     # Transitive closure over the schemas themselves.
     pending = list(used)
     while pending:
@@ -743,7 +767,7 @@ def curate(src: dict[str, Any]) -> dict[str, Any]:
             "schemas": {
                 **{k: renamed[k] for k in sorted(renamed)},
                 "ErrorEnvelope": ERROR_SCHEMA,
-                "InsufficientBalance": insufficient_balance_schema(with_offer),
+                "InsufficientBalance": insufficient_balance_schema(with_offer, with_top_up),
             },
         },
     }

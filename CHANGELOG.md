@@ -3,6 +3,37 @@
 All notable changes to the public OpenAPI document are listed here. The version is the API's
 `info.version` as served at `https://api.faxforagents.com/openapi.json`.
 
+## 1.17.0 (2026-11-12)
+
+API version 1.17.0, curated from the server document at that release. 115 paths, 145 operations and
+152 schemas. The document a production server serves at 1.17.0 is the same source, byte for byte.
+
+- `read_one_time_order_by_token` joins the document: `POST /v1/one-time-sends/by-token` reads what a
+  mailed confirmation link is for, with the token in the body. It changes nothing, so `x-llm.mutating`
+  is false. `get_one_time_order_by_token`, the same read with the token in the path, is deprecated: a
+  token in a path reaches access logs.
+- `OneTimeFromQuote` documents `approval_id`, and `accept_aup` is no longer required there. A key's
+  value is not recorded. The person who pays accepts the acceptable use policy and the terms on the
+  order's page.
+- `create_one_time_checkout` takes an optional body, `{"accept_aup": true}`. An order whose
+  `aup_accepted` is false needs it once, from the status token or a session, never from a key.
+- `OneTimeOrder` and `OneTimeOrderCreated` carry `aup_accepted`, `status_url` and `queue`.
+  `OneTimeConfig` carries `queue`. New schema `OneTimeQueue` with `queued`, `jobs_ahead` and
+  `estimated_wait_minutes`: the wait for a carrier line. A queued order is kept and sent in turn.
+- `Balance` carries `top_up_url`, the dashboard page where a person adds funds. `Capabilities` carries
+  `extraction_pricing`.
+- `InsufficientBalance` documents `details.top_up_url` and `details.one_time_offer`. The server sends
+  both since 1.17.0. The offer is present when the same send can be paid by card. It names the
+  one-time price, the page counts and the `approval_id` that authorizes the order.
+- Not visible in a schema: a premium-rate or personal-number range is refused as an unsupported
+  destination. A request body over the limit of its route answers `413 payload_too_large` in the
+  usual envelope. The limit is 1 MB by default and 4 MB on `POST /v1/documents`. The bytes of an upload
+  and the one-time create form keep their own larger limits.
+- `scripts/curate.py` gains `READS`, the operations sent with a mutating method that change nothing,
+  and `TOP_UP_MARKER`, which adds `details.top_up_url` only when the source carries the field.
+- The price card is still launch-v2, effective 2026-10-31. `docs/llms.txt` named launch-v1 and now
+  names the card in force.
+
 ## 1.16.1 (2026-11-12)
 
 API version 1.16.1, curated from the server document at that release. 114 paths, 144 operations and

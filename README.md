@@ -31,7 +31,7 @@ repository holds the public OpenAPI document of the API.
 
 | File | What it is |
 |---|---|
-| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 144 operations in 114 paths, 151 schemas, version 1.16.1 |
+| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 145 operations in 115 paths, 152 schemas, version 1.17.0 |
 | [`docs/`](docs/) | The rendered reference, published at <https://faxforagents.github.io/openapi/> |
 | [`docs/llms.txt`](docs/llms.txt) | The same contract written for a model |
 | [`scripts/curate.py`](scripts/curate.py) | Produces `openapi.yaml` from the server's own document |
@@ -107,8 +107,16 @@ The create takes no key. It answers a status token once. Send the token as `X-FF
 `?t=`, to read the order, open its checkout and have the confirmation mailed again. A live key with
 `fax:send` may create an order for its organization, and `POST /v1/one-time-sends/from-quote` turns
 a live quote the wallet does not cover into an order. Paying by card does not replace approval. With a
-key, the send must have an approval or a delegated policy, as a wallet send does. A test key is refused: an order is always live. The card is authorized at
-checkout and charged only when the carrier confirms delivery.
+key, the send must have an approval or a delegated policy, as a wallet send does. Pass the approval as
+`approval_id` on the from-quote body. A test key is refused: an order is always live. The card is
+authorized at checkout and charged only when the carrier confirms delivery.
+
+The person who pays accepts the acceptable use policy and the terms, never a key. With a key, the
+order starts with `aup_accepted` false and carries a `status_url`, the order's page. Hand that link to
+the person who pays. They accept the terms there and the checkout opens. `queue` on the config and on the order says whether a
+fax would wait for a carrier line, with `jobs_ahead` and `estimated_wait_minutes`. The confirm page
+reads a mailed link with `POST /v1/one-time-sends/by-token` and the token in the body. The older
+`GET /v1/one-time-sends/by-token/{token}` is deprecated.
 
 ## States
 
@@ -164,8 +172,12 @@ One envelope on every error.
 ```
 
 `402 insufficient_balance` on `POST /v1/faxes` has its own schema, `InsufficientBalance`: `details`
-carries `available_micro` and `needed_micro`. `429` carries `Retry-After`. Repeat a mutating call with the same `Idempotency-Key` and the same
-resource comes back with `Idempotent-Replayed: true`.
+carries `available_micro`, `needed_micro` and `top_up_url`, the page where a person adds funds. It
+carries `one_time_offer` too when the same send can be paid by card. `413 payload_too_large` answers a
+request body over the limit of its route: 1 MB by default and 4 MB on `POST /v1/documents`. The bytes
+of an upload and the one-time create form have their own larger limits. `429` carries `Retry-After`.
+Repeat a mutating call with the same `Idempotency-Key` and the same resource comes back with
+`Idempotent-Replayed: true`.
 
 ## Working on this repository
 
