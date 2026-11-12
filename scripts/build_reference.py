@@ -285,7 +285,7 @@ def build_llms_txt(spec: dict[str, Any]) -> str:
         "",
         "## Prices",
         "",
-        "Price card launch-v2 is effective from 2026-10-31. $0.039 per page sent, $0.019 per page received.",
+        "Price card launch-v3 is effective from 2026-11-12. $0.039 per page sent, $0.019 per page received.",
         "$2 per number per month, $19 per month for the Agent workspace. Amounts in the API are USD micro-units",
         "(39000 = $0.039). Sandbox pages cost 0.",
         "",

@@ -154,8 +154,8 @@ resets the organization's test data and reseeds the test wallet.
 
 ## Money
 
-Amounts are integer USD micro-units. `39000` is $0.039. Price card launch-v2 is effective from
-2026-10-31. $0.039 per page sent, $0.019 per page received. $2 per number per month, $19 per month
+Amounts are integer USD micro-units. `39000` is $0.039. Price card launch-v3 is effective from
+2026-11-12. $0.039 per page sent, $0.019 per page received. $2 per number per month, $19 per month
 for the Agent workspace. Sandbox pages cost 0. `GET /v1/capabilities` returns the card in force with its
 `price_version`.
 
