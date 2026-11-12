@@ -12,7 +12,7 @@ A fax job is `queued`, `active`, `partial`, `failed`, `unknown` or `delivered`. 
 
 Errors are one envelope: `{"error": {"code", "message", "retryable", "correlation_id", "details"}}`. Rate limits answer 429 with `Retry-After`.
 
-Base URL: https://api.faxforagents.com. Version 1.16.1.
+Base URL: https://api.faxforagents.com. Version 1.17.0.
 Authentication: `Authorization: Bearer ffa_live_...` or `X-API-Key`. Test keys are `ffa_test_...` and reach the sandbox only.
 
 ## Documents
@@ -274,7 +274,8 @@ One fax paid by card, with no wallet: the order, its checkout, the mailed confir
 - `GET /v1/one-time-sends` List the organization's one-time orders, newest first. Scope `fax:read`.
 - `POST /v1/one-time-sends/from-quote` Create a one-time order from a live quote the wallet does not cover. Scope `fax:send` (Idempotency-Key).
   For a live quote the wallet does not cover. The price is the one-time price of the card, not the quote's. A key still needs approval_id or a delegated policy that allows the send.
-- `GET /v1/one-time-sends/by-token/{token}` What a confirmation link is for, without using it. Scope `none`.
+- `POST /v1/one-time-sends/by-token` What a confirmation link is for, without using it. Scope `none`.
+- `GET /v1/one-time-sends/by-token/{token}` What a confirmation link is for, without using it (token in the path). Scope `none`.
 - `GET /v1/one-time-sends/{one_time_order_id}` Read a one-time order: where it stands, what to do next, and the fax with its evidence. Scope `fax:read`.
   Poll this. next names the step that is waiting, fax carries the job and its evidence once released.
 - `GET /v1/one-time-sends/{one_time_order_id}/receipt.pdf` The receipt of a one-time order's fax as a one-page PDF. Scope `fax:read`.
@@ -303,6 +304,6 @@ with the carrier's evidence on the attempt. `partial` and `unknown` never retran
 
 ## Prices
 
-Price card launch-v1 is effective from 2026-10-28. $0.039 per page sent, $0.019 per page received.
+Price card launch-v2 is effective from 2026-10-31. $0.039 per page sent, $0.019 per page received.
 $2 per number per month, $19 per month for the Agent workspace. Amounts in the API are USD micro-units
 (39000 = $0.039). Sandbox pages cost 0.
