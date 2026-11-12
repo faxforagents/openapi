@@ -15,6 +15,7 @@
   <a href="https://app.faxforagents.com">Dashboard</a> ·
   <a href="https://faxforagents.com/pricing/">Pricing</a> ·
   <a href="https://faxforagents.com/changelog/">Changelog</a> ·
+  <a href="https://faxforagents.com/affiliates/">Affiliate program</a> ·
   <a href="https://gitlab.com/faxforagents/openapi">GitLab</a>
 </p>
 
@@ -31,7 +32,7 @@ repository holds the public OpenAPI document of the API.
 
 | File | What it is |
 |---|---|
-| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 145 operations in 115 paths, 152 schemas, version 1.17.0 |
+| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 145 operations in 115 paths, 152 schemas, version 1.17.2 |
 | [`docs/`](docs/) | The rendered reference, published at <https://faxforagents.github.io/openapi/> |
 | [`docs/llms.txt`](docs/llms.txt) | The same contract written for a model |
 | [`scripts/curate.py`](scripts/curate.py) | Produces `openapi.yaml` from the server's own document |
