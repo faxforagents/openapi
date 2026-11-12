@@ -5,13 +5,16 @@ The server (FastAPI) generates ``/openapi.json`` from its routes. That document 
 paths, operationIds and schemas, and it also carries things a customer never calls: the admin tag and
 the ``/webhooks/*`` receivers (Stripe, Resend). This script turns it into ``openapi.yaml``:
 
-- drops every operation tagged ``admin`` or ``auth`` (the dashboard's cookie sign-in: magic links,
-  passkeys, OAuth, sessions, nothing an API key can call) and every path under ``/webhooks/``,
+- drops every operation tagged ``admin``, ``affiliate`` or ``auth`` (the dashboard's cookie sign-in: magic
+  links, passkeys, OAuth, sessions, nothing an API key can call),
+- drops every path under ``EXCLUDED_PATHS`` (``/v1/admin``, ``/v1/affiliate``, ``/webhooks``) whatever its
+  tag says, and fails when one of them reaches the output,
 - drops the operations named in ``EXCLUDED``, each with the reason it is not a customer call,
 - keeps every ``/v1`` customer operation with its operationId and its schemas,
 - gives the schemas whose names the server qualified by module (two ``Me``, two ``InboxItem``) the
   plain names the SDKs use (``RENAMES``),
-- adds ``servers``, ``info`` (contact, terms, privacy), the two security schemes and the tags,
+- adds ``servers``, ``info`` (contact, terms, privacy), the security schemes and the tags,
+- adds the error responses the server answers and does not declare (``DOCUMENTED_ERRORS``),
 - adds an ``x-llm`` block on every operation naming the scope the key needs, whether the call
   mutates and whether it honours ``Idempotency-Key``, so a model reading the document knows what a
   call costs before it makes it.
@@ -21,6 +24,7 @@ Usage::
     python scripts/curate.py                      # fetch https://api.faxforagents.com/openapi.json
     python scripts/curate.py --source live.json   # curate a saved document
     python scripts/curate.py --check              # fail when openapi.yaml is not what the source yields
+    python scripts/curate.py --source live.json --vendor   # also keep the source, without the excluded paths
 
 The scope table below is read from the server's routes (``require("fax:read")`` and the like). When a
 route changes its scope the table changes with it, in the same change.
@@ -40,6 +44,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "openapi.yaml"
+VENDORED = ROOT / "scripts" / "server-openapi.json"
 LIVE_URL = "https://api.faxforagents.com/openapi.json"
 
 INFO = {
@@ -82,6 +87,16 @@ SECURITY_SCHEMES = {
         "name": "X-API-Key",
         "description": "The same key in `X-API-Key`, for clients that cannot set `Authorization`.",
     },
+    "orderToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-FFA-Order-Token",
+        "description": (
+            "The status token of one one-time order, answered once by the create. It reads that order, opens "
+            "its checkout and mails its confirmation link again, for a caller with no key. The same value is "
+            "accepted as the query parameter `t`."
+        ),
+    },
 }
 
 TAGS = [
@@ -103,9 +118,11 @@ TAGS = [
     {"name": "organizations", "description": "The organizations the caller belongs to, the current one, data export and deletion requests."},
     {"name": "members", "description": "Members of the organization, their roles and invitations."},
     {"name": "oauth", "description": "Connected apps: the OAuth grants of the organization and their revocation."},
+    {"name": "one-time-sends", "description": "One fax paid by card, with no wallet: the order, its checkout, the mailed confirmation and the receipt."},
 ]
 
 #: operationId -> the scope the key needs. "any" is any valid key. "signed-url" is a link the API minted.
+#: "none" is a call that takes no credential at all. The one-time operations are also in ``ONE_TIME``.
 SCOPES: dict[str, str] = {
     "get_me": "any",
     "list_api_keys": "key:admin",
@@ -241,6 +258,38 @@ SCOPES: dict[str, str] = {
     "revoke_invitation": "member:admin",
     "list_oauth_grants": "key:admin",
     "revoke_oauth_grant": "key:admin",
+    "get_one_time_config": "none",
+    "create_one_time_order": "fax:send",
+    "create_one_time_order_from_quote": "fax:send",
+    "list_one_time_orders": "fax:read",
+    "get_one_time_order_by_token": "none",
+    "get_one_time_order": "fax:read",
+    "get_one_time_receipt_pdf": "fax:read",
+    "create_one_time_checkout": "fax:send",
+    "confirm_one_time_order": "none",
+    "resend_one_time_confirmation": "fax:send",
+}
+
+#: How a one-time operation is authorized, where a key with the scope in ``SCOPES`` is not the whole story.
+#: ``optional``: no credential is needed, and a live key or a session may be sent. ``token``: a key of the
+#: order's organization or the order's status token (``X-FFA-Order-Token`` or ``?t=``). Read from
+#: ``api/routes/onetime.py`` of the server (1.16.1).
+ONE_TIME: dict[str, str] = {
+    "create_one_time_order": "optional",
+    "get_one_time_order": "token",
+    "get_one_time_receipt_pdf": "token",
+    "create_one_time_checkout": "token",
+    "resend_one_time_confirmation": "token",
+}
+
+#: One-time operations that start something. They answer 503 ``one_time_unavailable`` while the product is
+#: switched off on the server. Reads always answer.
+ONE_TIME_SWITCHED = {
+    "create_one_time_order",
+    "create_one_time_order_from_quote",
+    "create_one_time_checkout",
+    "confirm_one_time_order",
+    "resend_one_time_confirmation",
 }
 
 #: operationId -> why the operation is not in the public document. These carry a customer tag, so
@@ -250,8 +299,27 @@ EXCLUDED: dict[str, str] = {
     "get_oauth_authorization": "dashboard session only: the consent screen behind an OAuth consent URL",
     "approve_oauth_authorization": "dashboard session only: a signed-in person allows an OAuth connection",
     "deny_oauth_authorization": "dashboard session only: a signed-in person denies an OAuth connection",
-    "get_one_time_config": "no key: read by the public one-time send page, whose order routes are not in the API",
+    "get_affiliate": "affiliate program: dashboard session only, not launched",
+    "enrol_affiliate": "affiliate program: dashboard session only, not launched",
+    "leave_affiliate": "affiliate program: dashboard session only, not launched",
+    "list_affiliate_links": "affiliate program: dashboard session only, not launched",
+    "set_affiliate_mail_preference": "affiliate program: dashboard session only, not launched",
+    "get_affiliate_overview": "affiliate program: dashboard session only, not launched",
+    "get_affiliate_payout": "affiliate payout: dashboard session only, not launched",
+    "put_affiliate_payout": "affiliate payout: dashboard session only, not launched",
+    "start_affiliate_connect": "affiliate payout: dashboard session only, not launched",
+    "refresh_affiliate_connect": "affiliate payout: dashboard session only, not launched",
+    "upload_affiliate_tax_form": "affiliate payout: dashboard session only, not launched",
+    "list_affiliate_referrals": "affiliate program: dashboard session only, not launched",
+    "set_affiliate_referrer": "affiliate program: dashboard session only, not launched",
+    "list_affiliate_statements": "affiliate program: dashboard session only, not launched",
+    "get_affiliate_statement": "affiliate program: dashboard session only, not launched",
 }
+
+#: Path prefixes that never appear in the public document, whatever tag or operationId the server gives
+#: the operations under them: the operator routes, the affiliate area and the inbound receivers (carrier,
+#: Stripe, Resend). ``curate`` refuses to write a document that holds one.
+EXCLUDED_PATHS = ("/v1/admin", "/v1/affiliate", "/webhooks")
 
 #: How long a signed link lives, where it is not the ten minutes of the document and inbox links.
 SIGNED_LINK_LIFETIME: dict[str, str] = {
@@ -287,7 +355,7 @@ REWRITES: dict[str, str] = {
 }
 
 #: Tags whose operations never appear in the public document.
-DROPPED_TAGS = {"admin", "auth"}
+DROPPED_TAGS = {"admin", "affiliate", "auth"}
 
 #: Summaries rewritten where the server's wording does not read well on its own.
 SUMMARIES: dict[str, str] = {
@@ -333,6 +401,19 @@ HINTS: dict[str, str] = {
     "create_sandbox_scenario": "The destination table already covers every outcome. Use this to pin one for 24 hours.",
     "put_auto_send": "Needs org:admin and policy:admin together. Never an agent key.",
     "list_oauth_grants": "Answers 404 while OAuth connections are not enabled on the server.",
+    "get_one_time_config": "Read enabled first. The routes and their prices are present only while the product is open here.",
+    "create_one_time_order": (
+        "Charges nothing and sends nothing. Keep status_token: it is answered once. Next is the checkout, "
+        "then a person pays on checkout_url and clicks the mailed confirmation link."
+    ),
+    "create_one_time_order_from_quote": (
+        "For a live quote the wallet does not cover. The price is the one-time price of the card, not the "
+        "quote's. A key still needs approval_id or a delegated policy that allows the send."
+    ),
+    "get_one_time_order": "Poll this. next names the step that is waiting, fax carries the job and its evidence once released.",
+    "create_one_time_checkout": "The card is authorized on the hosted page and charged only when the carrier confirms delivery. A person pays, never the agent.",
+    "confirm_one_time_order": "The token comes from the mailed link and works once. This releases the fax.",
+    "resend_one_time_confirmation": "At most three times per order and once in ten minutes.",
 }
 
 #: Operations that reach the carrier with a live key. On a production server with no carrier configured
@@ -352,6 +433,112 @@ LIVE_CARRIER = {
 
 MUTATING = {"post", "patch", "delete", "put"}
 
+#: The pointer to the card path that a wallet refusal carries on servers that send it. The server adds it
+#: with the change that gives ``OneTimeOrder`` its ``status_url``, so ``curate`` documents it only when the
+#: source document has that field: the public document never describes a field the server does not send.
+ONE_TIME_OFFER_MARKER = ("OneTimeOrder", "status_url")
+ONE_TIME_OFFER_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "description": (
+        "The card path for this exact send, present when it qualifies: the one-time product is open, the "
+        "key is live, the route is sold one fax at a time and the document is within the page cap. Pass "
+        "the quote to POST /v1/one-time-sends/from-quote. A pointer, never a promise: the create runs "
+        "every check again."
+    ),
+    "required": ["amount_micro", "currency", "document_pages", "included_pages", "extra_page_micro", "max_document_pages"],
+    "properties": {
+        "amount_micro": {"type": "integer", "description": "The one-time price of this document to this number."},
+        "currency": {"type": "string"},
+        "document_pages": {"type": "integer"},
+        "included_pages": {"type": "integer"},
+        "extra_page_micro": {"type": "integer"},
+        "max_document_pages": {"type": "integer"},
+        "approval_id": {
+            "type": ["string", "null"],
+            "description": "The approval that authorized this send. It authorizes the order of the same quote too.",
+        },
+    },
+}
+
+
+def insufficient_balance_schema(with_offer: bool) -> dict[str, Any]:
+    details: dict[str, Any] = {
+        "type": "object",
+        "additionalProperties": True,
+        "required": ["available_micro", "needed_micro"],
+        "properties": {
+            "available_micro": {"type": "integer", "description": "What the wallet holds that is not on hold."},
+            "needed_micro": {"type": "integer", "description": "What this fax holds."},
+        },
+    }
+    if with_offer:
+        details["properties"]["one_time_offer"] = ONE_TIME_OFFER_SCHEMA
+    return {
+        "title": "InsufficientBalance",
+        "description": "The error envelope of 402 insufficient_balance, with its details written out.",
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+            "error": {
+                "type": "object",
+                "required": ["code", "message", "retryable", "correlation_id", "details"],
+                "properties": {
+                    "code": {"type": "string", "const": "insufficient_balance"},
+                    "message": {"type": "string"},
+                    "retryable": {"type": "boolean"},
+                    "correlation_id": {"type": "string"},
+                    "details": details,
+                },
+            }
+        },
+    }
+
+
+#: operationId -> status -> the description of an error the server answers there and does not declare in
+#: its own document. Read from the server's routes and services (1.16.1). The codes are stable.
+DOCUMENTED_ERRORS: dict[str, dict[str, str]] = {
+    "create_fax": {
+        "402": "The wallet does not cover this fax (insufficient_balance). details names available_micro and needed_micro. Nothing was held.",
+        "403": "The key lacks the scope fax:send (scope_missing), or the send needs a person's approval (approval_required).",
+        "409": (
+            "The quote expired (quote_expired), already created a fax (quote_consumed), belongs to a one-time "
+            "order (quote_pricing_mismatch), or the document changed since the quote (document_hash_mismatch). "
+            "Also idempotency_key_conflict: the Idempotency-Key was used with a different body."
+        ),
+    },
+    "create_one_time_order": {
+        "403": "A key was sent and lacks fax:send (scope_missing), or the destination is blocked (blocked_destination).",
+        "422": (
+            "The form was refused (invalid_request), the number is not a fax destination (invalid_destination), "
+            "the route is not sold one fax at a time (unsupported_destination), or the document is too large "
+            "(document_too_large). A test key is refused: an order is live."
+        ),
+    },
+    "create_one_time_order_from_quote": {
+        "403": "The key lacks fax:send (scope_missing), or the send has no approval and no policy allows it (approval_required).",
+        "409": "The quote expired (quote_expired), or the document changed since the quote (document_hash_mismatch).",
+    },
+    "get_one_time_order_by_token": {
+        "404": "The confirmation link is not valid (link_invalid).",
+    },
+    "get_one_time_receipt_pdf": {
+        "409": "No receipt yet: the order has no fax, or the fax has not ended (conflict).",
+    },
+    "create_one_time_checkout": {
+        "409": "The order is already paid (already_paid), or it ended (order_closed).",
+    },
+    "confirm_one_time_order": {
+        "404": "The confirmation link is not valid for this order (link_invalid).",
+        "409": "The link was already used (link_used), expired (link_expired), or the browser is signed in as someone else (link_other_session).",
+    },
+    "resend_one_time_confirmation": {
+        "409": "The order is not waiting for its confirmation (order_closed).",
+    },
+}
+
+ONE_TIME_404 = "No such order. A wrong token, another organization's key and an unknown id all answer this (not_found)."
+ONE_TIME_503 = "One-time sends are switched off on this server (one_time_unavailable). Nothing was created or charged."
+
 ERROR_SCHEMA = {
     "title": "ErrorEnvelope",
     "type": "object",
@@ -361,7 +548,7 @@ ERROR_SCHEMA = {
             "type": "object",
             "required": ["code", "message", "retryable", "correlation_id"],
             "properties": {
-                "code": {"type": "string", "description": "A stable code such as invalid_token, scope_missing, not_found, quote_expired, insufficient_balance, approval_required, rate_limited, live_provider_unavailable."},
+                "code": {"type": "string", "description": "A stable code such as invalid_token, scope_missing, not_found, quote_expired, insufficient_balance, approval_required, rate_limited, live_provider_unavailable, one_time_unavailable."},
                 "message": {"type": "string", "description": "One sentence a person can act on."},
                 "retryable": {"type": "boolean"},
                 "correlation_id": {"type": "string", "description": "The X-Request-Id of the request. Quote it when you write to hello@faxforagents.com."},
@@ -401,7 +588,7 @@ def collect_refs(node: Any, out: set[str]) -> None:
 def curate(src: dict[str, Any]) -> dict[str, Any]:
     paths: dict[str, Any] = {}
     for path, ops in src["paths"].items():
-        if path.startswith("/webhooks/"):
+        if path.startswith(EXCLUDED_PATHS):
             continue
         if not path.startswith("/v1/"):
             continue
@@ -436,7 +623,30 @@ def curate(src: dict[str, Any]) -> dict[str, Any]:
                 x_llm["hint"] = HINTS[oid]
             op["x-llm"] = x_llm
             responses = op.setdefault("responses", {})
-            if scope == "signed-url":
+            for status, text in DOCUMENTED_ERRORS.get(oid, {}).items():
+                responses[status] = error_response(text)
+            if oid == "create_fax":
+                responses["402"]["content"]["application/json"]["schema"] = {
+                    "$ref": "#/components/schemas/InsufficientBalance"
+                }
+            how = ONE_TIME.get(oid)
+            if oid in ONE_TIME_SWITCHED:
+                responses.setdefault("503", error_response(ONE_TIME_503))
+            if scope == "none":
+                op["security"] = []
+                x_llm["idempotency_key"] = False
+                responses.setdefault("429", error_response("Rate limit reached (rate_limited). Retry after the seconds in Retry-After."))
+                op["description"] = ((op.get("description") or "") + "\n\nNo API key is needed.").strip()
+            elif how is not None:
+                if how == "optional":
+                    op["security"] = [{}, {"bearerAuth": []}, {"apiKeyHeader": []}]
+                    x_llm["key_optional"] = True
+                else:
+                    op["security"] = [{"bearerAuth": []}, {"apiKeyHeader": []}, {"orderToken": []}]
+                    x_llm["order_token"] = True
+                    responses.setdefault("404", error_response(ONE_TIME_404))
+                responses.setdefault("429", error_response("Rate limit reached (rate_limited). Retry after the seconds in Retry-After."))
+            elif scope == "signed-url":
                 op["security"] = []
                 responses.setdefault("404", error_response("No such resource, or the signed link expired."))
                 op["description"] = (
@@ -466,6 +676,8 @@ def curate(src: dict[str, Any]) -> dict[str, Any]:
     used: set[str] = set()
     collect_refs(paths, used)
     schemas = src.get("components", {}).get("schemas", {})
+    marker_schema, marker_field = ONE_TIME_OFFER_MARKER
+    with_offer = marker_field in schemas.get(marker_schema, {}).get("properties", {})
     # Transitive closure over the schemas themselves.
     pending = list(used)
     while pending:
@@ -492,7 +704,7 @@ def curate(src: dict[str, Any]) -> dict[str, Any]:
 
     renamed: dict[str, Any] = {}
     for name in sorted(used):
-        if name == "ErrorEnvelope":
+        if name in ("ErrorEnvelope", "InsufficientBalance"):
             continue
         target = RENAMES.get(name, name)
         if target in renamed or (target != name and target in used):
@@ -528,15 +740,42 @@ def curate(src: dict[str, Any]) -> dict[str, Any]:
         "paths": paths,
         "components": {
             "securitySchemes": SECURITY_SCHEMES,
-            "schemas": {**{k: renamed[k] for k in sorted(renamed)}, "ErrorEnvelope": ERROR_SCHEMA},
+            "schemas": {
+                **{k: renamed[k] for k in sorted(renamed)},
+                "ErrorEnvelope": ERROR_SCHEMA,
+                "InsufficientBalance": insufficient_balance_schema(with_offer),
+            },
         },
     }
+    for path in paths:
+        if path.startswith(EXCLUDED_PATHS):
+            raise SystemExit(f"{path} is under an excluded prefix and reached the public document")
     tag_names = {t["name"] for t in TAGS}
     for path, ops in paths.items():
         for op in ops.values():
             for t in op.get("tags") or []:
                 if t not in tag_names:
                     raise SystemExit(f"{op['operationId']} has tag {t!r} with no description in TAGS")
+    return out
+
+
+def strip_source(src: dict[str, Any]) -> dict[str, Any]:
+    """The server document without the paths under ``EXCLUDED_PATHS`` and without the schemas only they
+    use. This is the form kept in the repository as ``scripts/server-openapi.json``."""
+    out = copy.deepcopy(src)
+    out["paths"] = {p: ops for p, ops in out["paths"].items() if not p.startswith(EXCLUDED_PATHS)}
+    schemas = out.get("components", {}).get("schemas", {})
+    used: set[str] = set()
+    collect_refs(out["paths"], used)
+    pending = list(used)
+    while pending:
+        more: set[str] = set()
+        collect_refs(schemas.get(pending.pop(), {}), more)
+        for m in more - used:
+            used.add(m)
+            pending.append(m)
+    if schemas:
+        out["components"]["schemas"] = {k: v for k, v in schemas.items() if k in used}
     return out
 
 
@@ -564,8 +803,17 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--source", help="a saved openapi.json instead of the live document")
     ap.add_argument("--check", action="store_true", help="fail when openapi.yaml differs from the curated source")
+    ap.add_argument(
+        "--vendor",
+        action="store_true",
+        help="also write the source, without the excluded paths, to scripts/server-openapi.json",
+    )
     args = ap.parse_args()
-    doc = curate(fetch(args.source))
+    src = fetch(args.source)
+    if args.vendor:
+        VENDORED.write_text(json.dumps(strip_source(src), separators=(",", ":")), "utf-8")
+        print(f"wrote {VENDORED.relative_to(ROOT)}")
+    doc = curate(src)
     text = render(doc)
     ops = sum(len(ops) for ops in doc["paths"].values())
     summary = f"{len(doc['paths'])} paths, {ops} operations, {len(doc['components']['schemas'])} schemas, version {doc['info']['version']}"

@@ -12,7 +12,7 @@ A fax job is `queued`, `active`, `partial`, `failed`, `unknown` or `delivered`. 
 
 Errors are one envelope: `{"error": {"code", "message", "retryable", "correlation_id", "details"}}`. Rate limits answer 429 with `Retry-After`.
 
-Base URL: https://api.faxforagents.com. Version 1.13.2.
+Base URL: https://api.faxforagents.com. Version 1.16.1.
 Authentication: `Authorization: Bearer ffa_live_...` or `X-API-Key`. Test keys are `ffa_test_...` and reach the sandbox only.
 
 ## Documents
@@ -262,6 +262,28 @@ Connected apps: the OAuth grants of the organization and their revocation.
 - `GET /v1/oauth/grants` Your connected apps in this organization. Scope `key:admin` (never an agent key).
   Answers 404 while OAuth connections are not enabled on the server.
 - `DELETE /v1/oauth/grants/{grant_id}` Revoke a connected app. Scope `key:admin` (Idempotency-Key, never an agent key).
+
+### one-time-sends
+
+One fax paid by card, with no wallet: the order, its checkout, the mailed confirmation and the receipt.
+
+- `GET /v1/one-time-sends/config` Whether one-time sends are open here, and the card and limits an order is priced and checked by. Scope `none`.
+  Read enabled first. The routes and their prices are present only while the product is open here.
+- `POST /v1/one-time-sends` Create a one-time order: one document to one fax number, priced from the card. Scope `fax:send` (Idempotency-Key).
+  Charges nothing and sends nothing. Keep status_token: it is answered once. Next is the checkout, then a person pays on checkout_url and clicks the mailed confirmation link.
+- `GET /v1/one-time-sends` List the organization's one-time orders, newest first. Scope `fax:read`.
+- `POST /v1/one-time-sends/from-quote` Create a one-time order from a live quote the wallet does not cover. Scope `fax:send` (Idempotency-Key).
+  For a live quote the wallet does not cover. The price is the one-time price of the card, not the quote's. A key still needs approval_id or a delegated policy that allows the send.
+- `GET /v1/one-time-sends/by-token/{token}` What a confirmation link is for, without using it. Scope `none`.
+- `GET /v1/one-time-sends/{one_time_order_id}` Read a one-time order: where it stands, what to do next, and the fax with its evidence. Scope `fax:read`.
+  Poll this. next names the step that is waiting, fax carries the job and its evidence once released.
+- `GET /v1/one-time-sends/{one_time_order_id}/receipt.pdf` The receipt of a one-time order's fax as a one-page PDF. Scope `fax:read`.
+- `POST /v1/one-time-sends/{one_time_order_id}/checkout` Open the card payment of a one-time order. Scope `fax:send` (Idempotency-Key).
+  The card is authorized on the hosted page and charged only when the carrier confirms delivery. A person pays, never the agent.
+- `POST /v1/one-time-sends/{one_time_order_id}/confirm` Confirm a one-time order with the token of the mailed link: the fax is released. Scope `none`.
+  The token comes from the mailed link and works once. This releases the fax.
+- `POST /v1/one-time-sends/{one_time_order_id}/resend-confirmation` Mail the confirmation link of a one-time order again. Scope `fax:send` (Idempotency-Key).
+  At most three times per order and once in ten minutes.
 
 ## States
 

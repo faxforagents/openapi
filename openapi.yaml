@@ -26,7 +26,7 @@ info:
   x-logo:
     url: https://faxforagents.com/brand/logo-512.png
     altText: Fax for Agents
-  version: 1.13.2
+  version: 1.16.1
 servers:
 - url: https://api.faxforagents.com
   description: Production (live and test keys)
@@ -67,6 +67,8 @@ tags:
   description: Members of the organization, their roles and invitations.
 - name: oauth
   description: 'Connected apps: the OAuth grants of the organization and their revocation.'
+- name: one-time-sends
+  description: 'One fax paid by card, with no wallet: the order, its checkout, the mailed confirmation and the receipt.'
 security:
 - bearerAuth: []
 - apiKeyHeader: []
@@ -1284,14 +1286,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: No key, or a key that was revoked or expired (invalid_token).
+        '402':
+          description: The wallet does not cover this fax (insufficient_balance). details names available_micro
+            and needed_micro. Nothing was held.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsufficientBalance'
+        '403':
+          description: The key lacks the scope fax:send (scope_missing), or the send needs a person's approval (approval_required).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-        '403':
-          description: The key lacks the scope fax:send (scope_missing).
+        '409':
+          description: 'The quote expired (quote_expired), already created a fax (quote_consumed), belongs to a
+            one-time order (quote_pricing_mismatch), or the document changed since the quote (document_hash_mismatch).
+            Also idempotency_key_conflict: the Idempotency-Key was used with a different body.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: No key, or a key that was revoked or expired (invalid_token).
           content:
             application/json:
               schema:
@@ -8011,6 +8028,871 @@ paths:
         mutating: false
         idempotency_key: false
         agent_key_allowed: true
+  /v1/one-time-sends/config:
+    get:
+      tags:
+      - one-time-sends
+      summary: Whether one-time sends are open here, and the card and limits an order is priced and checked by
+      operationId: get_one_time_config
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OneTimeConfig'
+        '429':
+          description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      x-llm:
+        scope: none
+        mutating: false
+        idempotency_key: false
+        agent_key_allowed: true
+        hint: Read enabled first. The routes and their prices are present only while the product is open here.
+      security: []
+      description: No API key is needed.
+  /v1/one-time-sends:
+    post:
+      tags:
+      - one-time-sends
+      summary: 'Create a one-time order: one document to one fax number, priced from the card'
+      description: No credential is needed. The answer carries the price, the page count and the status token. The
+        next step is the checkout. A live key with fax:send or a signed-in session may create an order for its organization.
+        Nothing is charged and nothing is sent by this call.
+      operationId: create_one_time_order
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OneTimeOrderCreated'
+        '403':
+          description: A key was sent and lacks fax:send (scope_missing), or the destination is blocked (blocked_destination).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '422':
+          description: 'The form was refused (invalid_request), the number is not a fax destination (invalid_destination),
+            the route is not sold one fax at a time (unsupported_destination), or the document is too large (document_too_large).
+            A test key is refused: an order is live.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: One-time sends are switched off on this server (one_time_unavailable). Nothing was created
+            or charged.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              additionalProperties: false
+              description: |-
+                The JSON form of an order: text only. A file (PDF, PNG, JPEG, TIFF) goes as ``multipart/form-data``
+                with the same field names and the part ``file``.
+              properties:
+                email:
+                  anyOf:
+                  - maxLength: 254
+                    type: string
+                  - type: 'null'
+                  description: Where the confirmation link, the receipt and the evidence go. Required without a
+                    credential; a signed-in session uses its own address; a key may leave it out to use the organization's.
+                  title: Email
+                sender_name:
+                  description: Printed on the cover sheet. 2 to 120 characters.
+                  maxLength: 200
+                  title: Sender Name
+                  type: string
+                to:
+                  description: The destination fax number, E.164.
+                  maxLength: 40
+                  title: To
+                  type: string
+                accept_aup:
+                  description: 'True: the sender accepts the acceptable use policy and the terms the config route
+                    names.'
+                  title: Accept Aup
+                  type: boolean
+                to_name:
+                  anyOf:
+                  - maxLength: 120
+                    type: string
+                  - type: 'null'
+                  title: To Name
+                subject:
+                  anyOf:
+                  - maxLength: 200
+                    type: string
+                  - type: 'null'
+                  title: Subject
+                message:
+                  anyOf:
+                  - maxLength: 2000
+                    type: string
+                  - type: 'null'
+                  title: Message
+                text:
+                  description: The document as plain text or Markdown.
+                  title: Text
+                  type: string
+                text_format:
+                  default: text
+                  enum:
+                  - text
+                  - markdown
+                  title: Text Format
+                  type: string
+                delete_after_send:
+                  default: false
+                  description: 'Delete the document and the transmitted copy the moment the fax ends in delivered,
+                    partial or failed. The order, the receipt and the carrier evidence stay; they hold no document
+                    content. A fax that ends unknown keeps the document until the carrier reports, or until the
+                    retention period ends. Default: keep the document for the retention period.'
+                  title: Delete After Send
+                  type: boolean
+                source_ref:
+                  anyOf:
+                  - maxLength: 32
+                    type: string
+                  - type: 'null'
+                  description: Where the sender came from (a short tag, never a URL).
+                  title: Source Ref
+                file:
+                  type: string
+                  format: binary
+                  description: 'The document: PDF, PNG, JPEG or TIFF. Send this or text, not both.'
+              required:
+              - sender_name
+              - to
+              - accept_aup
+              type: object
+          application/json:
+            schema:
+              additionalProperties: false
+              description: |-
+                The JSON form of an order: text only. A file (PDF, PNG, JPEG, TIFF) goes as ``multipart/form-data``
+                with the same field names and the part ``file``.
+              properties:
+                email:
+                  anyOf:
+                  - maxLength: 254
+                    type: string
+                  - type: 'null'
+                  description: Where the confirmation link, the receipt and the evidence go. Required without a
+                    credential; a signed-in session uses its own address; a key may leave it out to use the organization's.
+                  title: Email
+                sender_name:
+                  description: Printed on the cover sheet. 2 to 120 characters.
+                  maxLength: 200
+                  title: Sender Name
+                  type: string
+                to:
+                  description: The destination fax number, E.164.
+                  maxLength: 40
+                  title: To
+                  type: string
+                accept_aup:
+                  description: 'True: the sender accepts the acceptable use policy and the terms the config route
+                    names.'
+                  title: Accept Aup
+                  type: boolean
+                to_name:
+                  anyOf:
+                  - maxLength: 120
+                    type: string
+                  - type: 'null'
+                  title: To Name
+                subject:
+                  anyOf:
+                  - maxLength: 200
+                    type: string
+                  - type: 'null'
+                  title: Subject
+                message:
+                  anyOf:
+                  - maxLength: 2000
+                    type: string
+                  - type: 'null'
+                  title: Message
+                text:
+                  description: The document as plain text or Markdown.
+                  title: Text
+                  type: string
+                text_format:
+                  default: text
+                  enum:
+                  - text
+                  - markdown
+                  title: Text Format
+                  type: string
+                delete_after_send:
+                  default: false
+                  description: 'Delete the document and the transmitted copy the moment the fax ends in delivered,
+                    partial or failed. The order, the receipt and the carrier evidence stay; they hold no document
+                    content. A fax that ends unknown keeps the document until the carrier reports, or until the
+                    retention period ends. Default: keep the document for the retention period.'
+                  title: Delete After Send
+                  type: boolean
+                source_ref:
+                  anyOf:
+                  - maxLength: 32
+                    type: string
+                  - type: 'null'
+                  description: Where the sender came from (a short tag, never a URL).
+                  title: Source Ref
+              required:
+              - sender_name
+              - to
+              - accept_aup
+              - text
+              type: object
+      x-llm:
+        scope: fax:send
+        mutating: true
+        idempotency_key: true
+        agent_key_allowed: true
+        hint: 'Charges nothing and sends nothing. Keep status_token: it is answered once. Next is the checkout,
+          then a person pays on checkout_url and clicks the mailed confirmation link.'
+        key_optional: true
+      security:
+      - {}
+      - bearerAuth: []
+      - apiKeyHeader: []
+    get:
+      tags:
+      - one-time-sends
+      summary: List the organization's one-time orders, newest first
+      operationId: list_one_time_orders
+      parameters:
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - draft
+            - checkout_open
+            - authorized
+            - awaiting_confirmation
+            - released
+            - capturing
+            - canceling
+            - captured
+            - released_hold
+            - expired
+            - refused
+            - settle_failed
+            type: string
+          - type: 'null'
+          title: Status
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OneTimeOrderPage'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: No key, or a key that was revoked or expired (invalid_token).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The key lacks the scope fax:read (scope_missing).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Not an id of this organization, or it was deleted (not_found).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      x-llm:
+        scope: fax:read
+        mutating: false
+        idempotency_key: false
+        agent_key_allowed: true
+  /v1/one-time-sends/from-quote:
+    post:
+      tags:
+      - one-time-sends
+      summary: Create a one-time order from a live quote the wallet does not cover
+      description: 'The quote supplies the document, the destination and the cover. The price is the card''s one-time
+        price, not the quote''s. The quote then belongs to the order. Needs a live key with fax:send. A key needs
+        what a wallet send of the quote needs: approval_id, or a delegated policy that allows the send. Paying by
+        card replaces neither. Without one the answer is 403 approval_required.'
+      operationId: create_one_time_order_from_quote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OneTimeFromQuote'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OneTimeOrderCreated'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: The key lacks fax:send (scope_missing), or the send has no approval and no policy allows
+            it (approval_required).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: The quote expired (quote_expired), or the document changed since the quote (document_hash_mismatch).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: One-time sends are switched off on this server (one_time_unavailable). Nothing was created
+            or charged.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: No key, or a key that was revoked or expired (invalid_token).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Not an id of this organization, or it was deleted (not_found).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
+      x-llm:
+        scope: fax:send
+        mutating: true
+        idempotency_key: true
+        agent_key_allowed: true
+        hint: For a live quote the wallet does not cover. The price is the one-time price of the card, not the quote's.
+          A key still needs approval_id or a delegated policy that allows the send.
+  /v1/one-time-sends/by-token/{token}:
+    get:
+      tags:
+      - one-time-sends
+      summary: What a confirmation link is for, without using it
+      description: |-
+        The confirm page reads this before the click. Nothing is consumed by reading it.
+
+        No API key is needed.
+      operationId: get_one_time_order_by_token
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Token
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OneTimeConfirmSummary'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '404':
+          description: The confirmation link is not valid (link_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      x-llm:
+        scope: none
+        mutating: false
+        idempotency_key: false
+        agent_key_allowed: true
+      security: []
+  /v1/one-time-sends/{one_time_order_id}:
+    get:
+      tags:
+      - one-time-sends
+      summary: 'Read a one-time order: where it stands, what to do next, and the fax with its evidence'
+      operationId: get_one_time_order
+      parameters:
+      - name: one_time_order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: One Time Order Id
+      - name: t
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: The status token, when no header carries it.
+          title: T
+        description: The status token, when no header carries it.
+      - name: X-FFA-Order-Token
+        in: header
+        required: false
+        schema:
+          type: string
+        description: The status token of the order, for a caller without a key or a session.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OneTimeOrder'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '404':
+          description: No such order. A wrong token, another organization's key and an unknown id all answer this
+            (not_found).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      x-llm:
+        scope: fax:read
+        mutating: false
+        idempotency_key: false
+        agent_key_allowed: true
+        hint: Poll this. next names the step that is waiting, fax carries the job and its evidence once released.
+        order_token: true
+      security:
+      - bearerAuth: []
+      - apiKeyHeader: []
+      - orderToken: []
+  /v1/one-time-sends/{one_time_order_id}/receipt.pdf:
+    get:
+      tags:
+      - one-time-sends
+      summary: The receipt of a one-time order's fax as a one-page PDF
+      description: 'The delivery receipt of the order''s fax: the state, the pages, the document hash, the carrier''s
+        evidence as it was reported, and what became of the card. It says charged only once the payment provider
+        confirmed the capture. A key or session of the order''s organization may read it, and so may the status
+        token, as the header or as ?t=. 409 conflict while the fax has not ended or the order has no fax.'
+      operationId: get_one_time_receipt_pdf
+      parameters:
+      - name: one_time_order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: One Time Order Id
+      - name: t
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: The status token, when no header carries it.
+          title: T
+        description: The status token, when no header carries it.
+      - name: X-FFA-Order-Token
+        in: header
+        required: false
+        schema:
+          type: string
+        description: The status token of the order, for a caller without a key or a session.
+      responses:
+        '200':
+          description: The receipt as a PDF
+          content:
+            application/pdf: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '409':
+          description: 'No receipt yet: the order has no fax, or the fax has not ended (conflict).'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No such order. A wrong token, another organization's key and an unknown id all answer this
+            (not_found).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      x-llm:
+        scope: fax:read
+        mutating: false
+        idempotency_key: false
+        agent_key_allowed: true
+        order_token: true
+      security:
+      - bearerAuth: []
+      - apiKeyHeader: []
+      - orderToken: []
+  /v1/one-time-sends/{one_time_order_id}/checkout:
+    post:
+      tags:
+      - one-time-sends
+      summary: Open the card payment of a one-time order
+      description: 'Answers the hosted payment page of the order. The card is authorized there, not charged: it
+        is charged when the carrier confirms delivery. A second call answers the same page while it can still be
+        paid, and a new one after it expired.'
+      operationId: create_one_time_checkout
+      parameters:
+      - name: one_time_order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: One Time Order Id
+      - name: t
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: The status token, when no header carries it.
+          title: T
+        description: The status token, when no header carries it.
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
+      - name: X-FFA-Order-Token
+        in: header
+        required: false
+        schema:
+          type: string
+        description: The status token of the order, for a caller without a key or a session.
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OneTimeCheckout'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '409':
+          description: The order is already paid (already_paid), or it ended (order_closed).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: One-time sends are switched off on this server (one_time_unavailable). Nothing was created
+            or charged.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No such order. A wrong token, another organization's key and an unknown id all answer this
+            (not_found).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      x-llm:
+        scope: fax:send
+        mutating: true
+        idempotency_key: true
+        agent_key_allowed: true
+        hint: The card is authorized on the hosted page and charged only when the carrier confirms delivery. A person
+          pays, never the agent.
+        order_token: true
+      security:
+      - bearerAuth: []
+      - apiKeyHeader: []
+      - orderToken: []
+  /v1/one-time-sends/{one_time_order_id}/confirm:
+    post:
+      tags:
+      - one-time-sends
+      summary: 'Confirm a one-time order with the token of the mailed link: the fax is released'
+      description: |-
+        Proves the sender's address and releases the fax. In a browser without a session it also signs the payer in and sets the session cookies. Idempotency-Key is accepted but ignored: the link works once. A repeat by the same signed-in person answers the confirmed order again. Any other repeat answers 409 link_used and sends nothing.
+
+        No API key is needed.
+      operationId: confirm_one_time_order
+      parameters:
+      - name: one_time_order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: One Time Order Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OneTimeConfirm'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OneTimeConfirmed'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '404':
+          description: The confirmation link is not valid for this order (link_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: The link was already used (link_used), expired (link_expired), or the browser is signed in
+            as someone else (link_other_session).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: One-time sends are switched off on this server (one_time_unavailable). Nothing was created
+            or charged.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      x-llm:
+        scope: none
+        mutating: true
+        idempotency_key: false
+        agent_key_allowed: true
+        hint: The token comes from the mailed link and works once. This releases the fax.
+      security: []
+  /v1/one-time-sends/{one_time_order_id}/resend-confirmation:
+    post:
+      tags:
+      - one-time-sends
+      summary: Mail the confirmation link of a one-time order again
+      description: At most three times per order and once in ten minutes. The earlier links keep working.
+      operationId: resend_one_time_confirmation
+      parameters:
+      - name: one_time_order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: One Time Order Id
+      - name: t
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: The status token, when no header carries it.
+          title: T
+        description: The status token, when no header carries it.
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
+      - name: X-FFA-Order-Token
+        in: header
+        required: false
+        schema:
+          type: string
+        description: The status token of the order, for a caller without a key or a session.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OneTimeOrder'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '409':
+          description: The order is not waiting for its confirmation (order_closed).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: One-time sends are switched off on this server (one_time_unavailable). Nothing was created
+            or charged.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No such order. A wrong token, another organization's key and an unknown id all answer this
+            (not_found).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      x-llm:
+        scope: fax:send
+        mutating: true
+        idempotency_key: true
+        agent_key_allowed: true
+        hint: At most three times per order and once in ten minutes.
+        order_token: true
+      security:
+      - bearerAuth: []
+      - apiKeyHeader: []
+      - orderToken: []
   /v1/oauth/grants:
     get:
       tags:
@@ -8150,6 +9032,13 @@ components:
       in: header
       name: X-API-Key
       description: The same key in `X-API-Key`, for clients that cannot set `Authorization`.
+    orderToken:
+      type: apiKey
+      in: header
+      name: X-FFA-Order-Token
+      description: The status token of one one-time order, answered once by the create. It reads that order, opens
+        its checkout and mails its confirmation link again, for a caller with no key. The same value is accepted
+        as the query parameter `t`.
   schemas:
     Agent:
       properties:
@@ -10372,6 +11261,16 @@ components:
           - type: 'null'
           title: Evidence
           description: The carrier's evidence once delivered or partial; null before.
+        one_time_order_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: One Time Order Id
+          description: The one-time order this fax was paid by; null for a wallet fax.
+        one_time:
+          anyOf:
+          - $ref: '#/components/schemas/OneTimeJob'
+          - type: 'null'
       additionalProperties: true
       type: object
       required:
@@ -11434,6 +12333,877 @@ components:
       additionalProperties: false
       type: object
       title: NumberUpdate
+    OneTimeCard:
+      properties:
+        last4:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last4
+        brand:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Brand
+      additionalProperties: true
+      type: object
+      required:
+      - last4
+      - brand
+      title: OneTimeCard
+    OneTimeCheckout:
+      properties:
+        order_id:
+          type: string
+          title: Order Id
+        checkout_url:
+          type: string
+          title: Checkout Url
+        expires_at:
+          type: string
+          title: Expires At
+        amount_micro:
+          type: integer
+          title: Amount Micro
+        currency:
+          type: string
+          title: Currency
+      additionalProperties: true
+      type: object
+      required:
+      - order_id
+      - checkout_url
+      - expires_at
+      - amount_micro
+      - currency
+      title: OneTimeCheckout
+    OneTimeConfig:
+      properties:
+        enabled:
+          type: boolean
+          title: Enabled
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+        price_version:
+          type: string
+          title: Price Version
+        effective_from:
+          type: string
+          title: Effective From
+        currency:
+          type: string
+          title: Currency
+        routes:
+          additionalProperties:
+            $ref: '#/components/schemas/OneTimeRoute'
+          type: object
+          title: Routes
+        max_document_pages:
+          type: integer
+          title: Max Document Pages
+        max_upload_bytes:
+          type: integer
+          title: Max Upload Bytes
+        max_text_chars:
+          type: integer
+          title: Max Text Chars
+        formats:
+          items:
+            type: string
+          type: array
+          title: Formats
+        aup_version:
+          type: string
+          title: Aup Version
+        aup_url:
+          type: string
+          title: Aup Url
+        terms_url:
+          type: string
+          title: Terms Url
+      additionalProperties: true
+      type: object
+      required:
+      - enabled
+      - price_version
+      - effective_from
+      - currency
+      - routes
+      - max_document_pages
+      - max_upload_bytes
+      - max_text_chars
+      - formats
+      - aup_version
+      - aup_url
+      - terms_url
+      title: OneTimeConfig
+      description: |-
+        What the public send page and an agent read before an order: whether the product is open here, the
+        card the order will be priced from (present only while open), the document limits and the policy the
+        sender accepts. Prices are integer micro-USD; the dollar figure is the client's to format.
+    OneTimeConfirm:
+      properties:
+        token:
+          type: string
+          maxLength: 128
+          minLength: 1
+          title: Token
+          description: The token of the link in the confirmation mail.
+      additionalProperties: false
+      type: object
+      required:
+      - token
+      title: OneTimeConfirm
+    OneTimeConfirmSummary:
+      properties:
+        order_id:
+          type: string
+          title: Order Id
+        state:
+          type: string
+          enum:
+          - ok
+          - link_used
+          - link_expired
+          title: State
+        status:
+          type: string
+          enum:
+          - draft
+          - checkout_open
+          - authorized
+          - awaiting_confirmation
+          - released
+          - capturing
+          - canceling
+          - captured
+          - released_hold
+          - expired
+          - refused
+          - settle_failed
+          title: Status
+        to:
+          type: string
+          title: To
+        sender_name:
+          type: string
+          title: Sender Name
+        email:
+          type: string
+          title: Email
+        document_pages:
+          type: integer
+          title: Document Pages
+        amount_micro:
+          type: integer
+          title: Amount Micro
+        currency:
+          type: string
+          title: Currency
+        confirm_deadline_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Confirm Deadline At
+      additionalProperties: true
+      type: object
+      required:
+      - order_id
+      - state
+      - status
+      - to
+      - sender_name
+      - email
+      - document_pages
+      - amount_micro
+      - currency
+      - confirm_deadline_at
+      title: OneTimeConfirmSummary
+      description: |-
+        What the confirm page shows before the click. ``state`` is ``ok`` while the link can still be used,
+        else ``link_used`` or ``link_expired``. Reading it consumes nothing.
+    OneTimeConfirmed:
+      properties:
+        order:
+          $ref: '#/components/schemas/OneTimeOrder'
+        signed_in:
+          type: boolean
+          title: Signed In
+        me:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Me
+      additionalProperties: true
+      type: object
+      required:
+      - order
+      - signed_in
+      title: OneTimeConfirmed
+      description: |-
+        ``signed_in`` says whether this browser now holds a session for the payer; ``me`` is then the same
+        object ``GET /v1/auth/me`` answers (the CSRF token included).
+    OneTimeFromQuote:
+      properties:
+        quote_id:
+          type: string
+          title: Quote Id
+        sender_name:
+          type: string
+          maxLength: 200
+          title: Sender Name
+          description: Printed on the cover sheet. 2 to 120 characters.
+        accept_aup:
+          type: boolean
+          title: Accept Aup
+        email:
+          anyOf:
+          - type: string
+            maxLength: 254
+          - type: 'null'
+          title: Email
+        approval_id:
+          anyOf:
+          - type: string
+            maxLength: 64
+          - type: 'null'
+          title: Approval Id
+          description: An approved, unused approval request for this quote (POST /v1/approval-requests). A key needs
+            it unless a delegated policy allows the send. A session needs none.
+        source_ref:
+          anyOf:
+          - type: string
+            maxLength: 32
+          - type: 'null'
+          title: Source Ref
+        delete_after_send:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Delete After Send
+          description: Delete the document and the transmitted copy the moment the fax ends in delivered, partial
+            or failed. The order, the receipt and the carrier evidence stay; they hold no document content. A fax
+            that ends unknown keeps the document until the carrier reports, or until the retention period ends.
+            Left out, the quote's own delete_after_send applies.
+      additionalProperties: false
+      type: object
+      required:
+      - quote_id
+      - sender_name
+      - accept_aup
+      title: OneTimeFromQuote
+    OneTimeJob:
+      properties:
+        order_id:
+          type: string
+          title: Order Id
+        status:
+          anyOf:
+          - type: string
+            enum:
+            - draft
+            - checkout_open
+            - authorized
+            - awaiting_confirmation
+            - released
+            - capturing
+            - canceling
+            - captured
+            - released_hold
+            - expired
+            - refused
+            - settle_failed
+          - type: 'null'
+          title: Status
+        amount_micro:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Amount Micro
+        captured_micro:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Captured Micro
+        refunded_micro:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Refunded Micro
+          description: What was refunded to the card after the charge, in micro-units.
+        document_pages:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Document Pages
+          description: The pages of the order's document. The cover sheet is not counted.
+        card:
+          anyOf:
+          - $ref: '#/components/schemas/OneTimeCard'
+          - type: 'null'
+      additionalProperties: true
+      type: object
+      required:
+      - order_id
+      title: OneTimeJob
+      description: 'The order behind a fax job that a one-time send made: what was authorized, what was charged.'
+    OneTimeOrder:
+      properties:
+        id:
+          type: string
+          title: Id
+        status:
+          type: string
+          enum:
+          - draft
+          - checkout_open
+          - authorized
+          - awaiting_confirmation
+          - released
+          - capturing
+          - canceling
+          - captured
+          - released_hold
+          - expired
+          - refused
+          - settle_failed
+          title: Status
+        next:
+          type: string
+          enum:
+          - checkout
+          - confirm
+          - wait
+          - done
+          title: Next
+        environment:
+          type: string
+          enum:
+          - live
+          - test
+          title: Environment
+        source:
+          type: string
+          enum:
+          - web
+          - api
+          - mcp
+          title: Source
+        email:
+          type: string
+          title: Email
+        email_verified:
+          type: boolean
+          title: Email Verified
+        sender_name:
+          type: string
+          title: Sender Name
+        to:
+          type: string
+          title: To
+        route:
+          type: string
+          title: Route
+        cover:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Cover
+        document_pages:
+          type: integer
+          title: Document Pages
+        document_sha256:
+          type: string
+          title: Document Sha256
+        document_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Document Id
+        delete_after_send:
+          type: boolean
+          title: Delete After Send
+          description: The sender asked for the document and the transmitted copy to be deleted the moment the fax
+            ends in delivered, partial or failed.
+          default: false
+        document_deleted:
+          type: boolean
+          title: Document Deleted
+          description: 'True once no copy of the document is held: it was deleted after the send, by the retention
+            period or by its owner, or the order ended before it was released and the uploaded file was removed.
+            The order, the fax and the carrier evidence stay; they hold no document content.'
+          default: false
+        document_expires_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Document Expires At
+          description: When the retention period deletes the stored document. Null before the release and once the
+            document is deleted.
+        price:
+          $ref: '#/components/schemas/OneTimePrice'
+        amount_micro:
+          type: integer
+          title: Amount Micro
+        captured_micro:
+          type: integer
+          title: Captured Micro
+        refunded_micro:
+          type: integer
+          title: Refunded Micro
+          description: What was refunded to the card after the charge, in micro-units, as the ledger holds it. Zero
+            when nothing was refunded. captured_micro stays what was charged.
+          default: 0
+        card:
+          anyOf:
+          - $ref: '#/components/schemas/OneTimeCard'
+          - type: 'null'
+        checkout_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Checkout Url
+        checkout_expires_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Checkout Expires At
+        authorized_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorized At
+        confirm_deadline_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Confirm Deadline At
+        capture_deadline_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Capture Deadline At
+        confirm_mail_sent_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Confirm Mail Sent At
+        resend_allowed_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Resend Allowed At
+          description: When the confirmation mail may be asked for again; null when it may not.
+        released_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Released At
+        settled_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Settled At
+        quote_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Quote Id
+        fax_job_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Fax Job Id
+        failure_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Failure Code
+        aup_version:
+          type: string
+          title: Aup Version
+        warnings:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Warnings
+        fax:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Fax
+          description: The fax job (the FaxJob shape) once the order was released; null before.
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+      additionalProperties: true
+      type: object
+      required:
+      - id
+      - status
+      - next
+      - environment
+      - source
+      - email
+      - email_verified
+      - sender_name
+      - to
+      - route
+      - cover
+      - document_pages
+      - document_sha256
+      - document_id
+      - price
+      - amount_micro
+      - captured_micro
+      - card
+      - checkout_url
+      - checkout_expires_at
+      - authorized_at
+      - confirm_deadline_at
+      - capture_deadline_at
+      - confirm_mail_sent_at
+      - released_at
+      - settled_at
+      - quote_id
+      - fax_job_id
+      - failure_code
+      - aup_version
+      - created_at
+      - updated_at
+      title: OneTimeOrder
+      description: |-
+        One order of the one-time send. ``next`` is what the caller does now: ``checkout`` (open the
+        payment), ``confirm`` (the payer clicks the link in the mail), ``wait`` (nothing to do; read again) or
+        ``done``. Money is integer micro-USD. ``captured_micro`` is what the card was charged, written only
+        once the payment provider confirmed it. ``fax`` is the fax job once the order was released, with the
+        carrier's evidence once it has any.
+    OneTimeOrderCreated:
+      properties:
+        id:
+          type: string
+          title: Id
+        status:
+          type: string
+          enum:
+          - draft
+          - checkout_open
+          - authorized
+          - awaiting_confirmation
+          - released
+          - capturing
+          - canceling
+          - captured
+          - released_hold
+          - expired
+          - refused
+          - settle_failed
+          title: Status
+        next:
+          type: string
+          enum:
+          - checkout
+          - confirm
+          - wait
+          - done
+          title: Next
+        environment:
+          type: string
+          enum:
+          - live
+          - test
+          title: Environment
+        source:
+          type: string
+          enum:
+          - web
+          - api
+          - mcp
+          title: Source
+        email:
+          type: string
+          title: Email
+        email_verified:
+          type: boolean
+          title: Email Verified
+        sender_name:
+          type: string
+          title: Sender Name
+        to:
+          type: string
+          title: To
+        route:
+          type: string
+          title: Route
+        cover:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Cover
+        document_pages:
+          type: integer
+          title: Document Pages
+        document_sha256:
+          type: string
+          title: Document Sha256
+        document_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Document Id
+        delete_after_send:
+          type: boolean
+          title: Delete After Send
+          description: The sender asked for the document and the transmitted copy to be deleted the moment the fax
+            ends in delivered, partial or failed.
+          default: false
+        document_deleted:
+          type: boolean
+          title: Document Deleted
+          description: 'True once no copy of the document is held: it was deleted after the send, by the retention
+            period or by its owner, or the order ended before it was released and the uploaded file was removed.
+            The order, the fax and the carrier evidence stay; they hold no document content.'
+          default: false
+        document_expires_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Document Expires At
+          description: When the retention period deletes the stored document. Null before the release and once the
+            document is deleted.
+        price:
+          $ref: '#/components/schemas/OneTimePrice'
+        amount_micro:
+          type: integer
+          title: Amount Micro
+        captured_micro:
+          type: integer
+          title: Captured Micro
+        refunded_micro:
+          type: integer
+          title: Refunded Micro
+          description: What was refunded to the card after the charge, in micro-units, as the ledger holds it. Zero
+            when nothing was refunded. captured_micro stays what was charged.
+          default: 0
+        card:
+          anyOf:
+          - $ref: '#/components/schemas/OneTimeCard'
+          - type: 'null'
+        checkout_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Checkout Url
+        checkout_expires_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Checkout Expires At
+        authorized_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorized At
+        confirm_deadline_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Confirm Deadline At
+        capture_deadline_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Capture Deadline At
+        confirm_mail_sent_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Confirm Mail Sent At
+        resend_allowed_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Resend Allowed At
+          description: When the confirmation mail may be asked for again; null when it may not.
+        released_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Released At
+        settled_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Settled At
+        quote_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Quote Id
+        fax_job_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Fax Job Id
+        failure_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Failure Code
+        aup_version:
+          type: string
+          title: Aup Version
+        warnings:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Warnings
+        fax:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Fax
+          description: The fax job (the FaxJob shape) once the order was released; null before.
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+        status_token:
+          type: string
+          title: Status Token
+        status_url:
+          type: string
+          title: Status Url
+      additionalProperties: true
+      type: object
+      required:
+      - id
+      - status
+      - next
+      - environment
+      - source
+      - email
+      - email_verified
+      - sender_name
+      - to
+      - route
+      - cover
+      - document_pages
+      - document_sha256
+      - document_id
+      - price
+      - amount_micro
+      - captured_micro
+      - card
+      - checkout_url
+      - checkout_expires_at
+      - authorized_at
+      - confirm_deadline_at
+      - capture_deadline_at
+      - confirm_mail_sent_at
+      - released_at
+      - settled_at
+      - quote_id
+      - fax_job_id
+      - failure_code
+      - aup_version
+      - created_at
+      - updated_at
+      - status_token
+      - status_url
+      title: OneTimeOrderCreated
+      description: |-
+        The create answer: the order plus the status token. The token reads this one order, opens its
+        checkout and asks for the confirmation mail again, with no key and no session, for seven days. Send it
+        as ``X-FFA-Order-Token`` (or ``?t=``). ``status_url`` is the order's page in the app with the token.
+    OneTimeOrderPage:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/OneTimeOrder'
+          type: array
+          title: Items
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+      additionalProperties: true
+      type: object
+      required:
+      - items
+      title: OneTimeOrderPage
+    OneTimePrice:
+      properties:
+        price_version:
+          type: string
+          title: Price Version
+        currency:
+          type: string
+          title: Currency
+        flat_micro:
+          type: integer
+          title: Flat Micro
+        included_pages:
+          type: integer
+          title: Included Pages
+        extra_page_micro:
+          type: integer
+          title: Extra Page Micro
+        cover_included:
+          type: boolean
+          title: Cover Included
+      additionalProperties: true
+      type: object
+      required:
+      - price_version
+      - currency
+      - flat_micro
+      - included_pages
+      - extra_page_micro
+      - cover_included
+      title: OneTimePrice
+    OneTimeRoute:
+      properties:
+        label:
+          type: string
+          title: Label
+        flat_micro:
+          type: integer
+          title: Flat Micro
+        included_pages:
+          type: integer
+          title: Included Pages
+        extra_page_micro:
+          type: integer
+          title: Extra Page Micro
+        cover_included:
+          type: boolean
+          title: Cover Included
+      additionalProperties: true
+      type: object
+      required:
+      - label
+      - flat_micro
+      - included_pages
+      - extra_page_micro
+      - cover_included
+      title: OneTimeRoute
     Organization:
       properties:
         id:
@@ -12173,6 +13943,11 @@ components:
         billable_pages:
           type: integer
           title: Billable Pages
+        cover_pages:
+          type: integer
+          title: Cover Pages
+          description: 'How many of the billable pages are the cover sheet: 0 or 1.'
+          default: 0
         pages_sent:
           type: integer
           title: Pages Sent
@@ -12213,6 +13988,14 @@ components:
         generated_at:
           type: string
           title: Generated At
+        one_time:
+          anyOf:
+          - $ref: '#/components/schemas/OneTimeJob'
+          - type: 'null'
+          description: Set on the receipt of a fax that a one-time order paid for. It names the order, its status,
+            the card and the amount the card was authorized for. captured_micro in it is the amount charged, written
+            once the payment provider confirmed the capture. For a card order read the money here. Null for a fax
+            paid from the wallet.
       additionalProperties: true
       type: object
       required:
@@ -13237,7 +15020,7 @@ components:
             code:
               type: string
               description: A stable code such as invalid_token, scope_missing, not_found, quote_expired, insufficient_balance,
-                approval_required, rate_limited, live_provider_unavailable.
+                approval_required, rate_limited, live_provider_unavailable, one_time_unavailable.
             message:
               type: string
               description: One sentence a person can act on.
@@ -13250,3 +15033,41 @@ components:
               type: object
               additionalProperties: true
               description: Code-specific fields, for example details.scope on scope_missing.
+    InsufficientBalance:
+      title: InsufficientBalance
+      description: The error envelope of 402 insufficient_balance, with its details written out.
+      type: object
+      required:
+      - error
+      properties:
+        error:
+          type: object
+          required:
+          - code
+          - message
+          - retryable
+          - correlation_id
+          - details
+          properties:
+            code:
+              type: string
+              const: insufficient_balance
+            message:
+              type: string
+            retryable:
+              type: boolean
+            correlation_id:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+              required:
+              - available_micro
+              - needed_micro
+              properties:
+                available_micro:
+                  type: integer
+                  description: What the wallet holds that is not on hold.
+                needed_micro:
+                  type: integer
+                  description: What this fax holds.

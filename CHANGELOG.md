@@ -3,6 +3,46 @@
 All notable changes to the public OpenAPI document are listed here. The version is the API's
 `info.version` as served at `https://api.faxforagents.com/openapi.json`.
 
+## 1.16.1 (2026-11-12)
+
+API version 1.16.1, curated from the server document at that release. 114 paths, 144 operations and
+151 schemas. The document a production server serves at 1.16.1 is the same source, byte for byte.
+
+- New tag `one-time-sends`: one fax paid by card, with no wallet. Ten operations join the document.
+  `get_one_time_config` reads whether the product is open, with the card and the limits.
+  `create_one_time_order` takes a file as `multipart/form-data` or text as JSON.
+  `create_one_time_order_from_quote` turns a live quote the wallet does not cover into an order.
+  `list_one_time_orders` and `get_one_time_order` read orders. `create_one_time_checkout` opens the
+  hosted card payment. `get_one_time_order_by_token` and `confirm_one_time_order` serve the mailed
+  confirmation link. `resend_one_time_confirmation` mails it again. `get_one_time_receipt_pdf` returns
+  the receipt. `get_one_time_config` leaves `EXCLUDED`.
+- New security scheme `orderToken`, the `X-FFA-Order-Token` header. The status token of an order reads
+  it, opens its checkout and mails its confirmation again, with no key. `x-llm.scope` gains the value
+  `none` for a call that takes no credential. `x-llm.key_optional` and `x-llm.order_token` mark the
+  one-time operations a key is optional for and the ones the token opens.
+- New schemas: `OneTimeConfig`, `OneTimeRoute`, `OneTimeOrder`, `OneTimeOrderCreated`,
+  `OneTimeOrderPage`, `OneTimeFromQuote`, `OneTimeCheckout`, `OneTimeConfirm`, `OneTimeConfirmSummary`,
+  `OneTimeConfirmed`, `OneTimeCard`, `OneTimePrice`, `OneTimeJob` and `InsufficientBalance`. `FaxJob`
+  and `Receipt` carry `one_time`, the order's block on a fax that a card paid for.
+- `create_fax` documents `402 insufficient_balance` with its own schema, `InsufficientBalance`, whose
+  `details` carries `available_micro` and `needed_micro`. It documents `403 approval_required` and the
+  `409` codes too. The one-time operations document their `403`, `404`, `409`, `422` and `503` answers.
+  The server does not declare these in its own document. They are added by `DOCUMENTED_ERRORS` in
+  `scripts/curate.py`, read from the server's routes.
+- `details.one_time_offer` on `402 insufficient_balance` is not in this version: server 1.16.1 does not
+  send it. `scripts/curate.py` adds it to `InsufficientBalance` by itself once the source document
+  carries the release that sends it.
+- `scripts/curate.py` gains `EXCLUDED_PATHS`: nothing under `/v1/admin`, `/v1/affiliate` or `/webhooks`
+  reaches the document, whatever its tag. The affiliate, payout and leave operations are named in
+  `EXCLUDED` as well, and the tag `affiliate` is dropped. `--vendor` keeps the source in
+  `scripts/server-openapi.json` without those paths and the schemas only they use.
+- Price card launch-v2, effective 2026-10-31. The four wallet prices are the same as on launch-v1. One
+  fax by card, published 2026-11-11: $2.49 for up to 5 pages to a US or Canadian number with the cover
+  page included, $0.49 for each extra page, 20 pages at most. `scripts/truthcheck.sh` accepts the two
+  one-time amounts only in a file that states 2026-11-11.
+- The README has the brand header. The reference pages link to the website, the docs, the dashboard,
+  the pricing page and the changelog.
+
 ## 1.13.2 (2026-11-10)
 
 API version 1.13.2, taken from the live server document. The same 105 paths, 134 operations and 137

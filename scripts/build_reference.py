@@ -202,13 +202,13 @@ def build_html(spec: dict[str, Any]) -> str:
 <style>{STYLES}</style>
 </head>
 <body>
-<header><strong>Fax for Agents</strong><nav><a href="./">Interactive reference</a><a href="./reference.html" aria-current="page">Plain reference</a><a href="./llms.txt">llms.txt</a><a href="{E(SITE)}/docs">Docs</a><a href="{E(REPO)}">Source</a></nav></header>
+<header><strong>Fax for Agents</strong><nav><a href="./">Interactive reference</a><a href="./reference.html" aria-current="page">Plain reference</a><a href="./llms.txt">llms.txt</a><a href="{E(SITE)}">Website</a><a href="{E(SITE)}/docs/">Docs</a><a href="https://app.faxforagents.com">Dashboard</a><a href="{E(SITE)}/pricing/">Pricing</a><a href="{E(SITE)}/changelog/">Changelog</a><a href="{E(REPO)}">Source</a></nav></header>
 <main>
 <h1>{E(info['title'])} reference</h1>
 <p class="meta">Version {E(info['version'])}. Base URL <code>{E(spec['servers'][0]['url'])}</code>. {ops} operations in {len(spec['paths'])} paths, {len(spec['components']['schemas'])} schemas. Generated from <a href="{E(REPO)}/blob/main/openapi.yaml">openapi.yaml</a>, no JavaScript needed.</p>
 {description}
 <h2>Authentication</h2>
-<p>Send the key as <code>Authorization: Bearer ffa_live_...</code>, or in <code>X-API-Key</code>. Every operation below names the scope the key needs. <code>any</code> is any valid key. <code>signed-url</code> is a link the API minted for you, no key.</p>
+<p>Send the key as <code>Authorization: Bearer ffa_live_...</code>, or in <code>X-API-Key</code>. Every operation below names the scope the key needs. <code>any</code> is any valid key. <code>signed-url</code> is a link the API minted for you, no key. <code>none</code> is a call that takes no credential. A one-time order is also read and paid with its status token, sent as <code>X-FFA-Order-Token</code>.</p>
 <h2>Contents</h2>
 <ul>{toc}<li><a href="#schemas">Schemas</a></li></ul>
 {sections}
