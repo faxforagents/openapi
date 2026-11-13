@@ -12,7 +12,7 @@ A fax job is `queued`, `active`, `partial`, `failed`, `unknown` or `delivered`. 
 
 Errors are one envelope: `{"error": {"code", "message", "retryable", "correlation_id", "details"}}`. Rate limits answer 429 with `Retry-After`.
 
-Base URL: https://api.faxforagents.com. Version 1.18.0.
+Base URL: https://api.faxforagents.com. Version 1.20.0.
 Authentication: `Authorization: Bearer ffa_live_...` or `X-API-Key`. Test keys are `ffa_test_...` and reach the sandbox only.
 
 ## Documents
@@ -205,7 +205,7 @@ Coverage, inventory, number orders, your numbers, porting and sender verificatio
 - `GET /v1/number-orders/{order_id}` Read a number order. Scope `number:read`.
 - `GET /v1/numbers` Your numbers. Scope `number:read`.
 - `GET /v1/numbers/{number_id}` One number. Scope `number:read`.
-- `PATCH /v1/numbers/{number_id}` Label and inbound route of a number. Scope `number:buy` (Idempotency-Key, never an agent key).
+- `PATCH /v1/numbers/{number_id}` Label, inbound route and PDF by mail of a number. Scope `number:buy` (Idempotency-Key, never an agent key).
 - `POST /v1/numbers/{number_id}/release-requests` Release a number (confirm with the number itself. 30-day quarantine follows). Scope `number:buy` (Idempotency-Key, never an agent key).
 - `POST /v1/portability-checks` Can these numbers port in. Scope `number:read` (Idempotency-Key).
 - `POST /v1/port-orders` Request a port-in (handled with you). Scope `number:buy` (Idempotency-Key, never an agent key).

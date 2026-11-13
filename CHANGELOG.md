@@ -3,6 +3,23 @@
 All notable changes to the public OpenAPI document are listed here. The version is the API's
 `info.version` as served at `https://api.faxforagents.com/openapi.json`.
 
+## 1.20.0 (2026-11-13)
+
+API version 1.20.0, curated from the server document at that release. 115 paths, 145 operations and
+151 schemas, the same counts as 1.18.0. No path, operation or schema was added or removed.
+
+- New field `email_pdf` on `Number`, a boolean that is false by default. When true, the notice mail of
+  a fax received on the number carries the PDF as an attachment. Live numbers only.
+- New field `email_pdf` on `NumberUpdate`, the body of `PATCH /v1/numbers/{number_id}`. It needs the
+  scope `number:buy`. An agent, an OAuth connection and a connected app are refused. The mail goes to
+  the verified address of an owner. A PDF over 15 MB is not attached.
+- The summary of `update_number` is now "Label, inbound route and PDF by mail of a number".
+- Removed field: `provider_cost_micro` on `Extraction`, from its properties and its required list.
+  The server stopped sending it at 1.19.0. A typed client that requires the field must drop it.
+- Not visible in a schema: since 1.19.0 each item of `pages` on an extraction has no `cost_micro`, and
+  `GET /v1/ledger` leaves out the entries of the `provider_cost` account. `price_micro` is unchanged.
+- 1.18.1, 1.19.1 and 1.19.2 changed no path and no schema.
+
 ## 1.18.0 (2026-11-12)
 
 API version 1.18.0, curated from the server document at that release. 115 paths, 145 operations and
