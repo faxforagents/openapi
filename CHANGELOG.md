@@ -3,6 +3,19 @@
 All notable changes to the public OpenAPI document are listed here. The version is the API's
 `info.version` as served at `https://api.faxforagents.com/openapi.json`.
 
+## 1.20.3 (2026-11-14)
+
+API version 1.20.3, curated from the server document at that release. 115 paths, 145 operations and
+151 schemas, the same counts as 1.20.0. Only `info.version` changed in the document.
+
+- 1.20.1, 1.20.2 and 1.20.3 changed no path, no operation and no schema. Since 1.20.1 a Canadian
+  number answers `country` as `CA`. Before, it answered `US`.
+- Fixed: `scripts/curate.py --vendor` dropped `ErrorEnvelope` and `ErrorBody` from
+  `scripts/server-openapi.json`, because only the shared responses point at them. Curating the kept
+  source then stopped with `KeyError: 'ErrorEnvelope'`. The kept source now holds every schema a shared
+  response reaches. `--vendor` refuses a kept source that curates to a different document.
+  `scripts/truthcheck.sh` curates the kept source in CI.
+
 ## 1.20.0 (2026-11-13)
 
 API version 1.20.0, curated from the server document at that release. 115 paths, 145 operations and

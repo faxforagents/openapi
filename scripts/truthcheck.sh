@@ -75,6 +75,11 @@ if grep -nE 'sessionCookie|__Host-ffa_session' openapi.yaml docs/reference.html 
     flag "the dashboard session scheme reached the public document (scripts/curate.py SESSION_SCHEME)"
 fi
 
+# 8) The kept source still curates to the published document, with no network.
+if ! python3 scripts/curate.py --check --source scripts/server-openapi.json >/dev/null; then
+    flag "scripts/server-openapi.json does not curate to openapi.yaml (run scripts/curate.py --vendor)"
+fi
+
 if [ "$fail" -eq 0 ]; then
     echo "truthcheck: OK"
 fi
