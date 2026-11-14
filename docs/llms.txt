@@ -12,7 +12,7 @@ A fax job is `queued`, `active`, `partial`, `failed`, `unknown` or `delivered`. 
 
 Errors are one envelope: `{"error": {"code", "message", "retryable", "correlation_id", "details"}}`. Rate limits answer 429 with `Retry-After`.
 
-Base URL: https://api.faxforagents.com. Version 1.20.3.
+Base URL: https://api.faxforagents.com. Version 1.20.5.
 Authentication: `Authorization: Bearer ffa_live_...` or `X-API-Key`. Test keys are `ffa_test_...` and reach the sandbox only.
 
 ## Documents
@@ -108,6 +108,7 @@ Balance, ledger, top-ups, budgets, usage, invoices and the workspace subscriptio
 - `POST /v1/topup-sessions` Open a hosted Checkout to fund the live wallet (10 to 1000 USD). Scope `billing:write` (Idempotency-Key, never an agent key).
 - `GET /v1/topup-sessions` Top-up sessions, newest first. Scope `billing:read`.
 - `GET /v1/topup-sessions/{topup_session_id}` Read a top-up session. Scope `billing:read`.
+- `GET /v1/topup-sessions/{topup_session_id}/receipt` Stripe's receipt for a paid top-up (manual, setup or automatic). Scope `billing:read`.
 - `POST /v1/auto-topups` Opt in to auto top-up (threshold, amount, daily cap). The card is saved at the first payment. Scope `billing:write` (Idempotency-Key, never an agent key).
 - `GET /v1/auto-topups` Auto top-up settings. Scope `billing:read`.
 - `DELETE /v1/auto-topups/{auto_topup_id}` Turn auto top-up off. Scope `billing:write` (Idempotency-Key, never an agent key).
@@ -120,6 +121,7 @@ Balance, ledger, top-ups, budgets, usage, invoices and the workspace subscriptio
 - `GET /v1/usage-exports/{export_id}/content` The CSV behind a signed URL (no API key). Scope `signed-url`.
 - `GET /v1/invoices` Stripe invoices and receipts (hosted links). Scope `billing:read`.
 - `GET /v1/invoices/{invoice_id}` One Stripe invoice. Scope `billing:read`.
+- `GET /v1/invoices/{invoice_id}/receipt` Stripe's receipt for a paid invoice. Scope `billing:read`.
 - `POST /v1/subscriptions/checkout` Open a hosted Checkout for the Agent workspace subscription. Scope `billing:write` (Idempotency-Key, never an agent key).
 - `GET /v1/subscriptions` Subscriptions and the workspace entitlement. Scope `billing:read`.
 - `POST /v1/billing-portal-sessions` Open the Stripe customer portal (cards, invoices, the subscription). Scope `billing:write` (Idempotency-Key, never an agent key).

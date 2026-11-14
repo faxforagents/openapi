@@ -32,7 +32,7 @@ repository holds the public OpenAPI document of the API.
 
 | File | What it is |
 |---|---|
-| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 145 operations in 115 paths, 151 schemas, version 1.20.3 |
+| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 147 operations in 117 paths, 152 schemas, version 1.20.5 |
 | [`docs/`](docs/) | The rendered reference, published at <https://faxforagents.github.io/openapi/> |
 | [`docs/llms.txt`](docs/llms.txt) | The same contract written for a model |
 | [`scripts/curate.py`](scripts/curate.py) | Produces `openapi.yaml` from the server's own document |
@@ -84,10 +84,11 @@ POST /v1/faxes                quote_id (+ Idempotency-Key)          ->  fax_...,
 GET  /v1/faxes/{fax_id}       poll                                  ->  state, evidence once delivered
 ```
 
-A file goes through `POST /v1/uploads` with its `content_type`, a `PUT` of the bytes to the signed
-`upload_url`, `POST /v1/uploads/{id}/complete` with the sha256, then `POST /v1/documents` with the
-`upload_id`. The file is a PDF or an image: `application/pdf`, `image/png`, `image/jpeg` or
-`image/tiff`. An image becomes gray letter pages, every TIFF frame is a page. HTML passed as `html`
+A file goes through `POST /v1/uploads` with its `filename` and `size_bytes`, a `PUT` of the bytes to
+the signed `upload_url`, `POST /v1/uploads/{id}/complete` with the sha256, then `POST /v1/documents`
+with the `upload_id`. The file is a PDF or an image: `application/pdf`, `image/png`, `image/jpeg` or
+`image/tiff`. `content_type` is optional. Left out, the type is read from the filename, and a filename
+of another format is refused at once with 422 `unsupported_format`. An image becomes gray letter pages, every TIFF frame is a page. HTML passed as `html`
 is rendered by a headless browser with scripts off and no network. Inline CSS and `data:` images
 print, external resources are counted as blocked. At most 2 MiB of HTML.
 
@@ -186,7 +187,7 @@ of an upload and the one-time create form have their own larger limits. Every pu
 one table at <https://faxforagents.com/docs/limits/>. `429` carries `Retry-After`.
 
 The errors an operation can answer are declared on it. The shared ones are in `components.responses`:
-401, 402, 403, 404, 409, 413, 422, 429 and 503, each the envelope above. A field that fails validation
+401, 402, 403, 404, 409, 410, 413, 422, 429 and 503, each the envelope above. A field that fails validation
 answers 422 `invalid_request` in the same envelope.
 Repeat a mutating call with the same `Idempotency-Key` and the same resource comes back with
 `Idempotent-Replayed: true`.

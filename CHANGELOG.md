@@ -3,6 +3,39 @@
 All notable changes to the public OpenAPI document are listed here. The version is the API's
 `info.version` as served at `https://api.faxforagents.com/openapi.json`.
 
+## 1.20.5 (2026-11-14)
+
+API version 1.20.5, curated from the server document at that release. 117 paths, 147 operations and
+152 schemas. 1.20.3 had 115, 145 and 151.
+
+- New operation `get_invoice_receipt`, `GET /v1/invoices/{invoice_id}/receipt`. It returns the payment
+  receipt of a paid invoice. Scope `billing:read`.
+- New operation `get_topup_receipt`, `GET /v1/topup-sessions/{topup_session_id}/receipt`. It returns
+  the payment receipt of a paid top-up, an automatic one included. Scope `billing:read`.
+- New schema `PaymentReceipt`, the answer of both. `url` is the hosted receipt and `pdf_url` the same
+  receipt as a PDF. Both operations answer 409 while the payment has no receipt yet.
+- `UploadCreate.content_type` is optional and nullable. Left out, the type is read from the filename.
+  A filename of an unsupported format is refused by `POST /v1/uploads` with 422 `unsupported_format`.
+- `UploadCreate.size_bytes` is described as the exact byte count of the file.
+- `AutoTopupCreate.threshold_micro` has a maximum of 1000000000, which is 1000 USD. A larger value
+  answers 422.
+- `AgentCreate.contact_email` and `AgentUpdate.contact_email` have the format `email`. A value that is
+  not an address answers 422. An empty string still clears it.
+- `POST /v1/approval-requests` declares 200 beside 201. A repeated request returns the open one.
+- 413 is declared on every operation with a request body. 410 is declared on 138 operations, with the
+  new shared response `Gone`: a document or a received fax past its retention date, or an organization
+  that is being deleted.
+- 16 schemas of the quickstart path carry `examples`: `Balance`, `Document`, `DocumentCreate`,
+  `FaxCreate`, `FaxJob`, `InboxItemDetail`, `InboxPage`, `Quote`, `QuoteCreate`, `Receipt`,
+  `SandboxInboundCreate`, `UploadCreate`, `UploadSession`, `Webhook`, `WebhookCreate` and
+  `WebhookWithSecret`.
+- `Capabilities.scopes` is described as every scope the platform defines. `GET /v1/me` returns the
+  scopes of the calling credential.
+- Not visible in the document: the 404 of `POST /v1/fax-quotes` carries `details.field`, and the 409 of
+  a receipt asked for too early carries `details.state`. The 401 message names both prefixes,
+  `ffa_test_` and `ffa_live_`. A sandbox scenario replaces the earlier one of the same destination, and
+  an extraction on the sandbox engine costs 0.
+
 ## 1.20.3 (2026-11-14)
 
 API version 1.20.3, curated from the server document at that release. 115 paths, 145 operations and
