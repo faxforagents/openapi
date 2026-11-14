@@ -851,12 +851,17 @@ def curate(src: dict[str, Any]) -> dict[str, Any]:
 
 def strip_source(src: dict[str, Any]) -> dict[str, Any]:
     """The server document without the paths under ``EXCLUDED_PATHS`` and without the schemas only they
-    use. This is the form kept in the repository as ``scripts/server-openapi.json``."""
+    use. This is the form kept in the repository as ``scripts/server-openapi.json``.
+
+    A schema is kept when a kept path reaches it, directly or through a shared response
+    (``components.responses``). ``ErrorEnvelope`` is reached only that way since 1.18.0."""
     out = copy.deepcopy(src)
     out["paths"] = {p: ops for p, ops in out["paths"].items() if not p.startswith(EXCLUDED_PATHS)}
-    schemas = out.get("components", {}).get("schemas", {})
+    components = out.get("components", {})
+    schemas = components.get("schemas", {})
     used: set[str] = set()
     collect_refs(out["paths"], used)
+    collect_refs(components.get("responses", {}), used)
     pending = list(used)
     while pending:
         more: set[str] = set()
@@ -902,10 +907,13 @@ def main() -> int:
     )
     args = ap.parse_args()
     src = fetch(args.source)
-    if args.vendor:
-        VENDORED.write_text(json.dumps(strip_source(src), separators=(",", ":")), "utf-8")
-        print(f"wrote {VENDORED.relative_to(ROOT)}")
     doc = curate(src)
+    if args.vendor:
+        stripped = strip_source(src)
+        if curate(stripped) != doc:
+            raise SystemExit("the stripped source does not curate to the same document, see strip_source")
+        VENDORED.write_text(json.dumps(stripped, separators=(",", ":")), "utf-8")
+        print(f"wrote {VENDORED.relative_to(ROOT)}")
     text = render(doc)
     ops = sum(len(ops) for ops in doc["paths"].values())
     summary = f"{len(doc['paths'])} paths, {ops} operations, {len(doc['components']['schemas'])} schemas, version {doc['info']['version']}"
