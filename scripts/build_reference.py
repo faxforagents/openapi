@@ -276,7 +276,7 @@ def build_llms_txt(spec: dict[str, Any]) -> str:
         "",
         "- `+15550000001` delivered",
         "- `+15550000002` busy on attempt 1, delivered on attempt 2",
-        "- `+15550000003` partial",
+        "- `+15550000003` partial after 3 pages (2 of 3, 1 of 2). A one-page fax ends failed with `partial_delivery`",
         "- `+15550000004` no answer, failed after 3 attempts",
         "- `+15550000005` outcome unknown, callback missing",
         "- `+15550000006` provider timeout, unknown",
