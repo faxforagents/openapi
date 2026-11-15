@@ -32,7 +32,7 @@ repository holds the public OpenAPI document of the API.
 
 | File | What it is |
 |---|---|
-| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 163 operations in 130 paths, 174 schemas, version 1.20.8 |
+| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 163 operations in 130 paths, 174 schemas, version 1.20.9 |
 | [`docs/`](docs/) | The rendered reference, published at <https://faxforagents.github.io/openapi/> |
 | [`docs/llms.txt`](docs/llms.txt) | The same contract written for a model |
 | [`scripts/curate.py`](scripts/curate.py) | Produces `openapi.yaml` from the server's own document |
@@ -120,7 +120,8 @@ The create takes no key. It answers a status token once. Send the token as `X-FF
 a live quote the wallet does not cover into an order. Paying by card does not replace approval. With a
 key, the send must have an approval or a delegated policy, as a wallet send does. Pass the approval as
 `approval_id` on the from-quote body. A test key is refused: an order is always live. The card is
-held at checkout and charged only for the pages the carrier confirms.
+held at checkout. A failed fax costs nothing, and a fax that stops part way costs the price of the pages
+the carrier confirms.
 
 The person who pays accepts the acceptable use policy and the terms, never a key. With a key, the
 order starts with `aup_accepted` false and carries a `status_url`, the order's page. Hand that link to

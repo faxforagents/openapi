@@ -3,10 +3,11 @@
 All notable changes to the public OpenAPI document are listed here. The version is the API's
 `info.version` as served at `https://api.faxforagents.com/openapi.json`.
 
-## 1.20.8 (2026-11-15)
+## 1.20.9 (2026-11-15)
 
-API version 1.20.8, curated from the server document at that release. 130 paths, 163 operations and
-174 schemas. 1.20.6 had 128, 161 and 170.
+API version 1.20.9, curated from the server document at that release. 130 paths, 163 operations and
+174 schemas. 1.20.6 had 128, 161 and 170. The changes came with 1.20.8, and 1.20.9 changed the wording
+of one description.
 
 - New operation `cancel_topup_session`, `POST /v1/topup-sessions/{topup_session_id}/cancel`. It closes
   the hosted Checkout of an open manual or setup top-up and answers the session with status `canceled`.
@@ -35,6 +36,8 @@ API version 1.20.8, curated from the server document at that release. 130 paths,
 - The card of a one-time order is held, not authorized, in the descriptions of
   `create_one_time_checkout`, `OneTimeJob` and `Receipt.one_time`, and in the `x-llm` hint of
   `create_one_time_checkout`.
+- `create_one_time_checkout` and its `x-llm` hint state the payment rule of 1.20.9. A failed fax costs
+  nothing. A fax that stops part way is charged the price of the pages the carrier confirms.
 - 14 schemas gain a description, among them `StatementLine`, `Delivery` and `PolicyEvaluation`. Six
   one-time schemas have theirs reworded. Fields of 17 schemas gain or change a description, among them
   `ErrorBody.retryable`, `Delivery.status`, `Capabilities.one_time` and `Document.received`.

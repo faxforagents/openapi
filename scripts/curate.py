@@ -453,7 +453,10 @@ HINTS: dict[str, str] = {
         "quote's. A key still needs approval_id or a delegated policy that allows the send."
     ),
     "get_one_time_order": "Poll this. next names the step that is waiting, fax carries the job and its evidence once released.",
-    "create_one_time_checkout": "The card is held on the hosted page and charged only for the pages the carrier confirms. A person pays, never the agent.",
+    "create_one_time_checkout": (
+        "The card is held on the hosted page. A failed fax costs nothing, and a fax that stops part way costs "
+        "the price of the pages the carrier confirms. A person pays, never the agent."
+    ),
     "confirm_one_time_order": "The token comes from the mailed link and works once. This releases the fax.",
     "resend_one_time_confirmation": "At most three times per order and once in ten minutes.",
 }
