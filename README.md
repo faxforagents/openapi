@@ -32,7 +32,7 @@ repository holds the public OpenAPI document of the API.
 
 | File | What it is |
 |---|---|
-| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 163 operations in 130 paths, 174 schemas, version 1.20.9 |
+| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 163 operations in 130 paths, 174 schemas, version 1.20.10 |
 | [`docs/`](docs/) | The rendered reference, published at <https://faxforagents.github.io/openapi/> |
 | [`docs/llms.txt`](docs/llms.txt) | The same contract written for a model |
 | [`scripts/curate.py`](scripts/curate.py) | Produces `openapi.yaml` from the server's own document |
@@ -191,8 +191,10 @@ of an upload and the one-time create form have their own larger limits. Every pu
 one table at <https://faxforagents.com/docs/limits/>. `429` carries `Retry-After`.
 
 The errors an operation can answer are declared on it. The shared ones are in `components.responses`:
-401, 402, 403, 404, 409, 410, 413, 422, 429 and 503, each the envelope above. A field that fails validation
-answers 422 `invalid_request` in the same envelope.
+401, 402, 403, 404, 409, 410, 413, 422, 429 and 503, each the envelope above. Where the shared words are
+not true of a route, it carries its own. The document and inbox routes name their 410. The billing routes
+that refuse a test key name `environment_not_billable` under 403. Key rotation and top-up cancel name the
+`details` of their 409. A field that fails validation answers 422 `invalid_request` in the same envelope.
 Repeat a mutating call with the same `Idempotency-Key` and the same resource comes back with
 `Idempotent-Replayed: true`.
 

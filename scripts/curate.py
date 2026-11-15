@@ -562,22 +562,9 @@ def insufficient_balance_schema(with_offer: bool, with_top_up: bool = False) -> 
 
 
 #: operationId -> status -> the description of an error the server answers there and does not declare in
-#: its own document. Read from the server's routes and services (1.17.0, 1.20.8). The codes are stable.
+#: its own document. Read from the server's routes and services (1.17.0). The codes are stable. Since 1.20.10
+#: the server writes the 409 of rotate_api_key and cancel_topup_session itself, so neither is here.
 DOCUMENTED_ERRORS: dict[str, dict[str, str]] = {
-    "rotate_api_key": {
-        "409": (
-            "The key expired, so it cannot be rotated (conflict, with details.reason key_expired and "
-            "details.expires_at). Create a new key to replace it. Also idempotency_key_conflict: the "
-            "Idempotency-Key was used with a different body."
-        ),
-    },
-    "cancel_topup_session": {
-        "409": (
-            "The top-up has no open Checkout to cancel: it was paid, declined or charged off session "
-            "(conflict, with details.status). details.reason is paid when it was paid before the cancel. "
-            "Also idempotency_key_conflict: the Idempotency-Key was used with a different body."
-        ),
-    },
     "create_fax": {
         "402": (
             "The wallet does not cover this fax (insufficient_balance). details names available_micro and "

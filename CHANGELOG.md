@@ -3,6 +3,41 @@
 All notable changes to the public OpenAPI document are listed here. The version is the API's
 `info.version` as served at `https://api.faxforagents.com/openapi.json`.
 
+## 1.20.10 (2026-11-15)
+
+API version 1.20.10, curated from the server document at that release. 130 paths, 163 operations and
+174 schemas, the same as 1.20.9. No operation or schema is new.
+
+- `get_topup_session` takes `check_checkout`, a boolean that defaults to false. With true, the server
+  asks Stripe about the hosted Checkout of an open top-up. The answer is the new field
+  `TopupSession.checkout_status`: `open`, `complete`, `processing` or `expired`. It is null when not
+  asked, or when Stripe could not be read. Only Stripe's event credits the wallet.
+- Every `Delivery` carries `webhook_deleted`, which only `DeliveryDetail` had. It is true when the
+  webhook was deleted since. The deliveries that were waiting are not sent, and none can be replayed.
+- The 409 of `rotate_api_key` and of `cancel_topup_session` is now written by the server. The first
+  names `details.reason` `key_expired` and `details.expires_at`. The second names `details.status`,
+  and `details.reason` `paid` when the payment came in first. `scripts/curate.py` no longer writes
+  either.
+- The shared 409 no longer says that `error.code` names the state. A state with a code of its own, such
+  as `quote_expired`, is named by `error.code`. Otherwise the code is `conflict` and `error.message`
+  says what is in the way.
+- The shared 410 is `organization_deleted` alone. Six document routes name `document_expired` on their
+  410, and five inbox routes name `inbox_item_expired`. The signed links `get_document_content` and
+  `get_inbox_content` name only the expiry.
+- Eight billing routes name `environment_not_billable` on their 403, the refusal of a test key. They
+  are `create_topup_session`, `cancel_topup_session`, `create_auto_topup`, `list_invoices`,
+  `get_invoice`, `get_invoice_receipt`, `create_subscription_checkout` and `create_portal_session`.
+- `OneTimeCoverCheck` declares the limits of the create. `to_name` is at most 120 characters, `subject`
+  200 and `message` 2,000, where the schema said 1000, 1000 and 8000. A longer field answers 422
+  `invalid_request`, as on the create. The three fields gain a description.
+- The four counters of `PolicyUsage` gain a description. So do `policy_name` and `version` of
+  `PolicyVerdict` and `PolicyEvaluation`.
+- `NumberUpdate.email_pdf` says a PDF over 15 MiB is not attached, where it said 15 MB.
+- Not visible in the document: deleting a webhook ends the deliveries that were waiting for it. They
+  read `failed` with `error` "the webhook was deleted" and no `next_attempt_at`. A replay of any delivery
+  to a deleted webhook answers 409 `conflict` with `details.reason` `webhook_deleted`. The shared 409 of
+  `replay_webhook_delivery` does not name that reason.
+
 ## 1.20.9 (2026-11-15)
 
 API version 1.20.9, curated from the server document at that release. 130 paths, 163 operations and
