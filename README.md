@@ -32,7 +32,7 @@ repository holds the public OpenAPI document of the API.
 
 | File | What it is |
 |---|---|
-| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 161 operations in 128 paths, 170 schemas, version 1.20.6 |
+| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 163 operations in 130 paths, 174 schemas, version 1.20.8 |
 | [`docs/`](docs/) | The rendered reference, published at <https://faxforagents.github.io/openapi/> |
 | [`docs/llms.txt`](docs/llms.txt) | The same contract written for a model |
 | [`scripts/curate.py`](scripts/curate.py) | Produces `openapi.yaml` from the server's own document |
@@ -65,7 +65,7 @@ A test key (`ffa_test_...`) reaches the sandbox provider only. No carrier, no co
 box. A live key (`ffa_live_...`) reaches the carrier and spends the prepaid wallet.
 
 Every operation states its `security`: an API key in `bearerAuth` or `apiKeyHeader`, the `orderToken` of
-a one-time order, or a `signedUrl` the API handed out. Six operations of the one-time send need no
+a one-time order, or a `signedUrl` the API handed out. Seven operations of the one-time send need no
 credential. `x-required-scope` names the scope the key needs. The server's document also names the
 dashboard session as a credential. That session and the operations that take it alone stay out of
 this document.
@@ -105,6 +105,7 @@ hosted card payment and release the fax when the sender clicks the link mailed t
 ```
 GET  /v1/one-time-sends/config                 open here? the card, the limits      ->  enabled, routes
 POST /v1/one-time-sends/preview                a file or text, before any order     ->  document_pages, a thumbnail
+POST /v1/one-time-sends/cover-checks           the cover's fields, while typed      ->  fits, lines_left
 POST /v1/one-time-sends                        a file or text, to, email, accept_aup ->  oto_..., status_token
 POST /v1/one-time-sends/{id}/checkout          open the hosted payment page         ->  checkout_url
 POST /v1/one-time-sends/{id}/confirm           the token of the mailed link         ->  the order, fax released
@@ -119,7 +120,7 @@ The create takes no key. It answers a status token once. Send the token as `X-FF
 a live quote the wallet does not cover into an order. Paying by card does not replace approval. With a
 key, the send must have an approval or a delegated policy, as a wallet send does. Pass the approval as
 `approval_id` on the from-quote body. A test key is refused: an order is always live. The card is
-authorized at checkout and charged only when the carrier confirms delivery.
+held at checkout and charged only for the pages the carrier confirms.
 
 The person who pays accepts the acceptable use policy and the terms, never a key. With a key, the
 order starts with `aup_accepted` false and carries a `status_url`, the order's page. Hand that link to

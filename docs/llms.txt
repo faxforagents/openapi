@@ -12,7 +12,7 @@ A fax job is `queued`, `active`, `partial`, `failed`, `unknown` or `delivered`. 
 
 Errors are one envelope: `{"error": {"code", "message", "retryable", "correlation_id", "details"}}`. Rate limits answer 429 with `Retry-After`.
 
-Base URL: https://api.faxforagents.com. Version 1.20.6.
+Base URL: https://api.faxforagents.com. Version 1.20.8.
 Authentication: `Authorization: Bearer ffa_live_...` or `X-API-Key`. Test keys are `ffa_test_...` and reach the sandbox only.
 
 ## Documents
@@ -112,6 +112,7 @@ Balance, ledger, top-ups, budgets, usage, invoices and the workspace subscriptio
 - `POST /v1/topup-sessions` Open a hosted Checkout to fund the live wallet (10 to 1000 USD). Scope `billing:write` (Idempotency-Key, never an agent key).
 - `GET /v1/topup-sessions` Top-up sessions, newest first. Scope `billing:read`.
 - `GET /v1/topup-sessions/{topup_session_id}` Read a top-up session. Scope `billing:read`.
+- `POST /v1/topup-sessions/{topup_session_id}/cancel` Cancel an open top-up, so its hosted Checkout can no longer be paid. Scope `billing:write` (Idempotency-Key, never an agent key).
 - `GET /v1/topup-sessions/{topup_session_id}/receipt` Stripe's receipt for a paid top-up (manual, setup or automatic). Scope `billing:read`.
 - `POST /v1/auto-topups` Opt in to auto top-up (threshold, amount, daily cap). The card is saved at the first payment. Scope `billing:write` (Idempotency-Key, never an agent key).
 - `GET /v1/auto-topups` Auto top-up settings. Scope `billing:read`.
@@ -284,6 +285,7 @@ One fax paid by card, with no wallet: the order, its checkout, the mailed confir
 - `GET /v1/one-time-sends/config` Whether one-time sends are open here, and the card and limits an order is priced and checked by. Scope `none`.
   Read enabled first. The routes and their prices are present only while the product is open here.
 - `POST /v1/one-time-sends/preview` Count the pages of a document before an order is made. Scope `fax:send`.
+- `POST /v1/one-time-sends/cover-checks` Measure the room the cover sheet leaves for its message, before an order is made. Scope `none`.
 - `POST /v1/one-time-sends` Create a one-time order: one document to one fax number, priced from the card. Scope `fax:send` (Idempotency-Key).
   Charges nothing and sends nothing. Keep status_token: it is answered once. Next is the checkout, then a person pays on checkout_url and clicks the mailed confirmation link.
 - `GET /v1/one-time-sends` List the organization's one-time orders, newest first. Scope `fax:read`.
@@ -296,7 +298,7 @@ One fax paid by card, with no wallet: the order, its checkout, the mailed confir
 - `GET /v1/one-time-sends/{one_time_order_id}/receipt.pdf` The receipt of a one-time order's fax as a one-page PDF. Scope `fax:read`.
 - `GET /v1/one-time-sends/{one_time_order_id}/pages/{page_number}` One page of a one-time order as a picture: the cover sheet, then the document. Scope `fax:read`.
 - `POST /v1/one-time-sends/{one_time_order_id}/checkout` Open the card payment of a one-time order. Scope `fax:send` (Idempotency-Key).
-  The card is authorized on the hosted page and charged only when the carrier confirms delivery. A person pays, never the agent.
+  The card is held on the hosted page and charged only for the pages the carrier confirms. A person pays, never the agent.
 - `POST /v1/one-time-sends/{one_time_order_id}/confirm` Confirm a one-time order with the token of the mailed link: the fax is released. Scope `none`.
   The token comes from the mailed link and works once. This releases the fax.
 - `POST /v1/one-time-sends/{one_time_order_id}/resend-confirmation` Mail the confirmation link of a one-time order again. Scope `fax:send` (Idempotency-Key).
