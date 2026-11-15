@@ -8,10 +8,10 @@ All notable changes to the public OpenAPI document are listed here. The version 
 API version 1.20.11, curated from the server document at that release. 130 paths, 163 operations and
 174 schemas, the same as 1.20.10. No operation or schema is new.
 
-- `replay_webhook_delivery` has a 409 of its own, written by the server. A delivery whose webhook was
-  deleted answers `conflict` with `details.reason` `webhook_deleted`, and nothing can be sent to it
-  again. The same 409 names `idempotency_key_conflict`. In 1.20.10 the route had the shared 409, which
-  does not name `webhook_deleted`.
+- `replay_webhook_delivery` has a 409 of its own, written by the server. A replay of a delivery whose
+  webhook was deleted answers `conflict` with `details.reason` `webhook_deleted`. Nothing can be sent to
+  that webhook again. The same 409 names `idempotency_key_conflict`. In 1.20.10 the route had the shared
+  409, which does not name `webhook_deleted`.
 - `TopupSession.checkout_status` is also null for a top-up that is not open. Stripe is asked about an
   open top-up only.
 - A new route of the dashboard sign-in, `confirm_reauth_link` (`POST /v1/auth/reauth/confirm`, tag
