@@ -3,6 +3,21 @@
 All notable changes to the public OpenAPI document are listed here. The version is the API's
 `info.version` as served at `https://api.faxforagents.com/openapi.json`.
 
+## 1.20.11 (2026-11-15)
+
+API version 1.20.11, curated from the server document at that release. 130 paths, 163 operations and
+174 schemas, the same as 1.20.10. No operation or schema is new.
+
+- `replay_webhook_delivery` has a 409 of its own, written by the server. A replay of a delivery whose
+  webhook was deleted answers `conflict` with `details.reason` `webhook_deleted`. Nothing can be sent to
+  that webhook again. The same 409 names `idempotency_key_conflict`. In 1.20.10 the route had the shared
+  409, which does not name `webhook_deleted`.
+- `TopupSession.checkout_status` is also null for a top-up that is not open. Stripe is asked about an
+  open top-up only.
+- A new route of the dashboard sign-in, `confirm_reauth_link` (`POST /v1/auth/reauth/confirm`, tag
+  `auth`), stays out, as every `auth` route does. Its schemas `ReauthConfirm` and `ReauthConfirmed` stay
+  out with it. So does `ReauthLinkSent`, the new 202 answer of `POST /v1/auth/reauth`.
+
 ## 1.20.10 (2026-11-15)
 
 API version 1.20.10, curated from the server document at that release. 130 paths, 163 operations and
@@ -35,8 +50,7 @@ API version 1.20.10, curated from the server document at that release. 130 paths
 - `NumberUpdate.email_pdf` says a PDF over 15 MiB is not attached, where it said 15 MB.
 - Not visible in the document: deleting a webhook ends the deliveries that were waiting for it. They
   read `failed` with `error` "the webhook was deleted" and no `next_attempt_at`. A replay of any delivery
-  to a deleted webhook answers 409 `conflict` with `details.reason` `webhook_deleted`. The shared 409 of
-  `replay_webhook_delivery` does not name that reason.
+  to a deleted webhook answers 409 `conflict` with `details.reason` `webhook_deleted`.
 
 ## 1.20.9 (2026-11-15)
 
