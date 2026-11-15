@@ -156,6 +156,7 @@ SCOPES: dict[str, str] = {
     "create_document": "document:write",
     "list_documents": "document:read",
     "get_document": "document:read",
+    "rename_document": "document:write",
     "delete_document": "document:write",
     "get_document_validation": "document:read",
     "get_document_download": "document:read",
@@ -179,10 +180,13 @@ SCOPES: dict[str, str] = {
     "rotate_webhook_secret": "webhook:admin",
     "test_webhook": "webhook:admin",
     "list_webhook_deliveries": "webhook:admin",
+    "get_webhook_delivery": "webhook:admin",
     "replay_webhook_delivery": "webhook:admin",
     "list_events": "fax:read",
     "get_balance": "billing:read",
     "list_ledger": "billing:read",
+    "get_statement": "billing:read",
+    "get_statement_csv": "billing:read",
     "get_billing_settings": "billing:read",
     "patch_billing_settings": "billing:write",
     "create_topup_session": "billing:write",
@@ -195,6 +199,7 @@ SCOPES: dict[str, str] = {
     "list_budgets": "billing:read",
     "create_budget": "billing:write",
     "patch_budget": "billing:write",
+    "delete_budget": "billing:write",
     "get_usage": "billing:read",
     "create_usage_export": "billing:read",
     "get_usage_export": "billing:read",
@@ -224,10 +229,12 @@ SCOPES: dict[str, str] = {
     "update_policy": "policy:admin",
     "list_policy_versions": "policy:read",
     "create_policy_evaluation": "policy:read",
+    "create_policy_rule_check": "policy:read",
     "list_agents": "agent:read",
     "create_agent": "agent:admin",
     "get_agent": "agent:read",
     "update_agent": "agent:admin",
+    "archive_agent": "agent:admin",
     "create_agent_key": "agent:admin",
     "get_agent_activity": "agent:read",
     "list_inbox": "inbox:read",
@@ -241,6 +248,7 @@ SCOPES: dict[str, str] = {
     "create_number_order": "number:buy",
     "list_number_orders": "number:read",
     "get_number_order": "number:read",
+    "dismiss_number_order": "number:buy",
     "list_numbers": "number:read",
     "get_number": "number:read",
     "update_number": "number:buy",
@@ -269,6 +277,8 @@ SCOPES: dict[str, str] = {
     "update_current_organization": "member:admin",
     "request_data_export": "org:admin",
     "request_data_deletion": "org:admin",
+    "list_data_requests": "account:read",
+    "withdraw_data_deletion": "org:admin",
     "download_export_archive": "signed-url",
     "get_auto_send": "policy:read",
     "put_auto_send": "org:admin",
@@ -277,16 +287,20 @@ SCOPES: dict[str, str] = {
     "remove_member": "org:admin",
     "list_invitations": "member:admin",
     "create_invitation": "member:admin",
+    "resend_invitation": "member:admin",
+    "link_invitation": "member:admin",
     "revoke_invitation": "member:admin",
     "list_oauth_grants": "key:admin",
     "revoke_oauth_grant": "key:admin",
     "get_one_time_config": "none",
+    "preview_one_time_document": "fax:send",
     "create_one_time_order": "fax:send",
     "create_one_time_order_from_quote": "fax:send",
     "list_one_time_orders": "fax:read",
     "get_one_time_order_by_token": "none",
     "read_one_time_order_by_token": "none",
     "get_one_time_order": "fax:read",
+    "get_one_time_order_page": "fax:read",
     "get_one_time_receipt_pdf": "fax:read",
     "create_one_time_checkout": "fax:send",
     "confirm_one_time_order": "none",
@@ -298,8 +312,10 @@ SCOPES: dict[str, str] = {
 #: order's organization or the order's status token (``X-FFA-Order-Token`` or ``?t=``). Read from
 #: ``api/routes/onetime.py`` of the server (1.16.1).
 ONE_TIME: dict[str, str] = {
+    "preview_one_time_document": "optional",
     "create_one_time_order": "optional",
     "get_one_time_order": "token",
+    "get_one_time_order_page": "token",
     "get_one_time_receipt_pdf": "token",
     "create_one_time_checkout": "token",
     "resend_one_time_confirmation": "token",
@@ -384,6 +400,7 @@ DROPPED_TAGS = {"admin", "affiliate", "auth"}
 SUMMARIES: dict[str, str] = {
     "create_fax": "Send a quoted fax. Pass an Idempotency-Key.",
     "get_effective_policies": "What the calling API key is allowed to do alone, and whether a human is needed otherwise",
+    "resend_invitation": "Send an open invitation again: a new link for 7 days, and the old link stops working",
 }
 
 
@@ -458,7 +475,9 @@ MUTATING = {"post", "patch", "delete", "put"}
 
 #: Operations sent with a mutating method that change nothing. ``read_one_time_order_by_token`` is a
 #: read that takes the confirmation token in the body so that it stays out of the address (1.17.0).
-READS = {"read_one_time_order_by_token"}
+#: ``preview_one_time_document`` and ``create_policy_rule_check`` store nothing, and the server accepts
+#: an Idempotency-Key on them but ignores it (1.20.6).
+READS = {"read_one_time_order_by_token", "preview_one_time_document", "create_policy_rule_check"}
 
 #: The pointer to the card path that a wallet refusal carries on servers that send it. The server adds it
 #: with the change that gives ``OneTimeOrder`` its ``status_url``, so ``curate`` documents it only when the

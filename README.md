@@ -32,7 +32,7 @@ repository holds the public OpenAPI document of the API.
 
 | File | What it is |
 |---|---|
-| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 147 operations in 117 paths, 152 schemas, version 1.20.5 |
+| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 161 operations in 128 paths, 170 schemas, version 1.20.6 |
 | [`docs/`](docs/) | The rendered reference, published at <https://faxforagents.github.io/openapi/> |
 | [`docs/llms.txt`](docs/llms.txt) | The same contract written for a model |
 | [`scripts/curate.py`](scripts/curate.py) | Produces `openapi.yaml` from the server's own document |
@@ -65,7 +65,7 @@ A test key (`ffa_test_...`) reaches the sandbox provider only. No carrier, no co
 box. A live key (`ffa_live_...`) reaches the carrier and spends the prepaid wallet.
 
 Every operation states its `security`: an API key in `bearerAuth` or `apiKeyHeader`, the `orderToken` of
-a one-time order, or a `signedUrl` the API handed out. Five operations of the one-time send need no
+a one-time order, or a `signedUrl` the API handed out. Six operations of the one-time send need no
 credential. `x-required-scope` names the scope the key needs. The server's document also names the
 dashboard session as a credential. That session and the operations that take it alone stay out of
 this document.
@@ -104,10 +104,12 @@ hosted card payment and release the fax when the sender clicks the link mailed t
 
 ```
 GET  /v1/one-time-sends/config                 open here? the card, the limits      ->  enabled, routes
+POST /v1/one-time-sends/preview                a file or text, before any order     ->  document_pages, a thumbnail
 POST /v1/one-time-sends                        a file or text, to, email, accept_aup ->  oto_..., status_token
 POST /v1/one-time-sends/{id}/checkout          open the hosted payment page         ->  checkout_url
 POST /v1/one-time-sends/{id}/confirm           the token of the mailed link         ->  the order, fax released
 GET  /v1/one-time-sends/{id}                   poll                                 ->  status, next, fax
+GET  /v1/one-time-sends/{id}/pages/{n}         page n, page 1 is the cover sheet    ->  a PNG
 GET  /v1/one-time-sends/{id}/receipt.pdf       once the fax ended                   ->  a one-page PDF
 ```
 
@@ -150,7 +152,7 @@ With a test key, the destination number picks the outcome.
 |---|---|
 | `+15550000001` | `delivered` on the first attempt |
 | `+15550000002` | busy on attempt 1, `delivered` on attempt 2 |
-| `+15550000003` | `partial` after 3 pages |
+| `+15550000003` | `partial` after 3 pages, 2 of 3 or 1 of 2. A one-page fax ends `failed` with `partial_delivery` |
 | `+15550000004` | no answer on all 3 attempts, `failed` |
 | `+15550000005` | accepted, no outcome reported, `unknown` with `callback_missing` |
 | `+15550000006` | the provider does not answer the send call, `unknown` with `provider_timeout` |

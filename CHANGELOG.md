@@ -3,6 +3,75 @@
 All notable changes to the public OpenAPI document are listed here. The version is the API's
 `info.version` as served at `https://api.faxforagents.com/openapi.json`.
 
+## 1.20.6 (2026-11-15)
+
+API version 1.20.6, curated from the server document at that release. 128 paths, 161 operations and
+170 schemas. 1.20.5 had 117, 147 and 152.
+
+- New operation `get_statement`, `GET /v1/statement`. The wallet statement, newest first: one line per
+  event with the balance after it. It filters by `kind`, `from` and `to`. New schemas `StatementPage`
+  and `StatementLine`. Scope `billing:read`.
+- New operation `get_statement_csv`, `GET /v1/statement.csv`. Every line the same filters select, as
+  CSV. Scope `billing:read`.
+- New operation `rename_document`, `PATCH /v1/documents/{document_id}`, with the body `DocumentUpdate`.
+  A name without `.pdf` gets it added. Scope `document:write`.
+- New operation `get_webhook_delivery`, `GET /v1/webhook-deliveries/{delivery_id}`. One delivery with
+  the headers and the JSON body that were sent, never a secret (`DeliveryDetail`). Scope `webhook:admin`.
+- New operation `delete_budget`, `DELETE /v1/budgets/{budget_id}`. A budget that never charged a hold
+  is deleted. One with history is archived (`BudgetRemoved`). Scope `billing:write`.
+- New operation `archive_agent`, `DELETE /v1/agents/{agent_id}`. The agent's keys are revoked and it
+  leaves the list (`AgentArchived`). Scope `agent:admin`.
+- New operation `dismiss_number_order`, `POST /v1/number-orders/{order_id}/dismissals`. It sets
+  `dismissed_at` on a failed order. Any other order answers 409. Scope `number:buy`.
+- New operation `create_policy_rule_check`, `POST /v1/policy-rule-checks`. It names the numbers of
+  `allowed_destinations` that a listed country or prefix already allows. It stores nothing. Scope
+  `policy:read`.
+- New operations `resend_invitation` and `link_invitation`, `POST /v1/invitations/{invitation_id}/resend`
+  and `.../link`. Both replace the link of an open invitation. The first mails it, the second answers
+  it once (`InvitationLink`). Scope `member:admin`.
+- New operation `list_data_requests`, `GET /v1/organizations/current/data-requests`, scope
+  `account:read`. New operation `withdraw_data_deletion`,
+  `DELETE /v1/organizations/current/deletion-requests/{request_id}`, scope `org:admin`. New schemas
+  `DataRequest` and `DataRequestList`.
+- New operation `preview_one_time_document`, `POST /v1/one-time-sends/preview`. It counts the pages of a
+  file and draws its first page before any order exists (`OneTimeInspection`). It needs no credential
+  and stores nothing.
+- New operation `get_one_time_order_page`, `GET /v1/one-time-sends/{one_time_order_id}/pages/{page_number}`.
+  One page of an order as a PNG, page 1 being the cover sheet. A key with `fax:read` or the order's
+  status token reads it.
+- New query parameters. `q` on `list_faxes` finds a destination or the start of a job id. `source`,
+  `exclude_source` and `q` on `list_documents`. `archived` on `list_inbox`. `include_archived` on
+  `list_agents` and `list_budgets`.
+- `list_approval_requests` describes `status=used`: the approvals a send consumed. Their status reads
+  `approved` and `consumed_by_job_id` names the fax.
+- New fields. `DocumentPage.total` counts every document the filters match. `InboxPage.unread` counts
+  the received faxes nobody opened yet, whatever the filters. `Balance.held_jobs`, `Quote.route_paused`,
+  `OneTimeQueue.paused`, `Webhook.failing` and `Delivery.webhook_url`.
+- More new fields. `Receipt.seller` (new schema `Seller`), `Receipt.provider_ref` and
+  `Receipt.sender_name`. `Document.converted_from` and `Document.received` (new schema
+  `DocumentReceived`). `InventoryNumber.owned` and `NumberOrder.dismissed_at`.
+- `InboxItem.file_deleted_at` and `InboxItemDetail.file_deleted_at` say when the file of a received fax
+  was deleted. `media_status` then reads `deleted`.
+- Names in place of ids. `ApprovalRequest.requested_by_name` and `decided_by_name`,
+  `PolicyVersion.created_by_name` and `AgentActivity.actor_label`. `ApprovalRequest.document` (new
+  schema `ApprovalDocument`) is the document a send request binds.
+- `Agent.archived_at`, `Budget.archived_at`, `OrganizationSummary.suspended_at`,
+  `Capabilities.default_scopes` and `Capabilities.admin_scopes`. `Requested` carries `id` and
+  `created_at`. `OneTimeOrder` carries `attempts` and `preview` (new schemas `OneTimeAttempts` and
+  `OneTimePreview`). `OneTimeJob` carries six receipt fields.
+- `PolicyEvaluationCreate` takes `key_id`, `agent_id` or `connection_id`, to evaluate as another caller
+  of the organization. `PolicyEvaluation` answers `subject`, `under_policy` and `approval_required`.
+- `OrganizationPatch.name` is at most 80 characters, down from 200. A longer name answers 422.
+- `list_agents` and `list_budgets` declare 422. `delete_inbox_item`, `create_policy_evaluation` and
+  `create_agent_key` have new summaries. `reject_request` says a help request closes without a reason.
+  `Inventory.locality` is null in test.
+- `preview_one_time_document` and `create_policy_rule_check` are marked as reads in `x-llm`. The server
+  accepts an `Idempotency-Key` on them and ignores it.
+- Three new routes of the dashboard sign-in (`preview_invitation`, `dismiss_notices` and
+  `rename_passkey`, tag `auth`) stay out, as every `auth` route does.
+- Not visible in the document: a one-page fax to the sandbox number `+15550000003` ends `failed` with
+  `partial_delivery`, because a partial delivery keeps at least one page.
+
 ## 1.20.5 (2026-11-14)
 
 API version 1.20.5, curated from the server document at that release. 117 paths, 147 operations and
