@@ -3,6 +3,47 @@
 All notable changes to the public OpenAPI document are listed here. The version is the API's
 `info.version` as served at `https://api.faxforagents.com/openapi.json`.
 
+## 1.20.9 (2026-11-15)
+
+API version 1.20.9, curated from the server document at that release. 130 paths, 163 operations and
+174 schemas. 1.20.6 had 128, 161 and 170. The changes came with 1.20.8, and 1.20.9 changed the wording
+of one description.
+
+- New operation `cancel_topup_session`, `POST /v1/topup-sessions/{topup_session_id}/cancel`. It closes
+  the hosted Checkout of an open manual or setup top-up and answers the session with status `canceled`.
+  Canceling a setup payment also turns off the auto top-up that waited on it. A top-up that was paid,
+  declined or charged off session answers 409. Scope `billing:write`.
+- New operation `create_one_time_cover_check`, `POST /v1/one-time-sends/cover-checks`. It lays out the
+  cover sheet of a one-time order from the fields typed so far (`OneTimeCoverCheck`). It answers whether
+  the message fits and how many more lines fit (`OneTimeCoverRoom`). It needs no credential and stores
+  nothing, so `x-llm` marks it as a read.
+- `get_statement` and `get_statement_csv` take `type`, the type each line shows. `kind` is the same
+  filter by its older name. Both at once answer 422 unless they name the same type.
+- `StatementLine.ref_type` names what a hold or its release was for: `fax_job`, `extraction` or
+  `number_order`. `GET /v1/ledger` keeps `fax_job` for every hold.
+- `Quote.pricing` is `per_page` for a quote paid from the wallet and `one_time` for the quote of a
+  one-time order. `Quote.policy_evaluation` is the dry run of the policies that bind the caller, made
+  with the quote (new schema `PolicyVerdict`).
+- `FaxJob.approval_id` and `FaxJob.policy_version_id` say what authorized a send. `FaxJob.route_paused`
+  says an operator paused sends on the fax's route.
+- `PolicyEvaluation` declares `managed` and `usage` (new schema `PolicyUsage`). Its `decision` is
+  `allow` or `deny`.
+- `rotate_api_key` answers 409 for a key that expired. Its 409 names `details.reason` `key_expired` and
+  says to create a new key. `cancel_topup_session` names `details.status` on its 409. In both,
+  `error.code` is `conflict`.
+- `PaymentReceipt.pdf_url` is null for a charge without an invoice, such as an automatic top-up. `url`
+  opens the receipt in every case.
+- The card of a one-time order is held, not authorized, in the descriptions of
+  `create_one_time_checkout`, `OneTimeJob` and `Receipt.one_time`, and in the `x-llm` hint of
+  `create_one_time_checkout`.
+- `create_one_time_checkout` and its `x-llm` hint state the payment rule of 1.20.9. A failed fax costs
+  nothing. A fax that stops part way is charged the price of the pages the carrier confirms.
+- 14 schemas gain a description, among them `StatementLine`, `Delivery` and `PolicyEvaluation`. Six
+  one-time schemas have theirs reworded. Fields of 17 schemas gain or change a description, among them
+  `ErrorBody.retryable`, `Delivery.status`, `Capabilities.one_time` and `Document.received`.
+- Not visible in the document: an adjustment line of the statement reads the note support wrote for the
+  customer. The refusals of the dashboard sign-in carry `retry_after_s`, and every `auth` route stays out.
+
 ## 1.20.6 (2026-11-15)
 
 API version 1.20.6, curated from the server document at that release. 128 paths, 161 operations and

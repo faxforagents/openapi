@@ -192,6 +192,7 @@ SCOPES: dict[str, str] = {
     "create_topup_session": "billing:write",
     "list_topup_sessions": "billing:read",
     "get_topup_session": "billing:read",
+    "cancel_topup_session": "billing:write",
     "get_topup_receipt": "billing:read",
     "list_auto_topups": "billing:read",
     "create_auto_topup": "billing:write",
@@ -294,6 +295,7 @@ SCOPES: dict[str, str] = {
     "revoke_oauth_grant": "key:admin",
     "get_one_time_config": "none",
     "preview_one_time_document": "fax:send",
+    "create_one_time_cover_check": "none",
     "create_one_time_order": "fax:send",
     "create_one_time_order_from_quote": "fax:send",
     "list_one_time_orders": "fax:read",
@@ -451,7 +453,10 @@ HINTS: dict[str, str] = {
         "quote's. A key still needs approval_id or a delegated policy that allows the send."
     ),
     "get_one_time_order": "Poll this. next names the step that is waiting, fax carries the job and its evidence once released.",
-    "create_one_time_checkout": "The card is authorized on the hosted page and charged only when the carrier confirms delivery. A person pays, never the agent.",
+    "create_one_time_checkout": (
+        "The card is held on the hosted page. A failed fax costs nothing, and a fax that stops part way costs "
+        "the price of the pages the carrier confirms. A person pays, never the agent."
+    ),
     "confirm_one_time_order": "The token comes from the mailed link and works once. This releases the fax.",
     "resend_one_time_confirmation": "At most three times per order and once in ten minutes.",
 }
@@ -476,8 +481,13 @@ MUTATING = {"post", "patch", "delete", "put"}
 #: Operations sent with a mutating method that change nothing. ``read_one_time_order_by_token`` is a
 #: read that takes the confirmation token in the body so that it stays out of the address (1.17.0).
 #: ``preview_one_time_document`` and ``create_policy_rule_check`` store nothing, and the server accepts
-#: an Idempotency-Key on them but ignores it (1.20.6).
-READS = {"read_one_time_order_by_token", "preview_one_time_document", "create_policy_rule_check"}
+#: an Idempotency-Key on them but ignores it (1.20.6). ``create_one_time_cover_check`` is the same (1.20.8).
+READS = {
+    "read_one_time_order_by_token",
+    "preview_one_time_document",
+    "create_policy_rule_check",
+    "create_one_time_cover_check",
+}
 
 #: The pointer to the card path that a wallet refusal carries on servers that send it. The server adds it
 #: with the change that gives ``OneTimeOrder`` its ``status_url``, so ``curate`` documents it only when the
@@ -552,8 +562,22 @@ def insufficient_balance_schema(with_offer: bool, with_top_up: bool = False) -> 
 
 
 #: operationId -> status -> the description of an error the server answers there and does not declare in
-#: its own document. Read from the server's routes and services (1.17.0). The codes are stable.
+#: its own document. Read from the server's routes and services (1.17.0, 1.20.8). The codes are stable.
 DOCUMENTED_ERRORS: dict[str, dict[str, str]] = {
+    "rotate_api_key": {
+        "409": (
+            "The key expired, so it cannot be rotated (conflict, with details.reason key_expired and "
+            "details.expires_at). Create a new key to replace it. Also idempotency_key_conflict: the "
+            "Idempotency-Key was used with a different body."
+        ),
+    },
+    "cancel_topup_session": {
+        "409": (
+            "The top-up has no open Checkout to cancel: it was paid, declined or charged off session "
+            "(conflict, with details.status). details.reason is paid when it was paid before the cancel. "
+            "Also idempotency_key_conflict: the Idempotency-Key was used with a different body."
+        ),
+    },
     "create_fax": {
         "402": (
             "The wallet does not cover this fax (insufficient_balance). details names available_micro and "
