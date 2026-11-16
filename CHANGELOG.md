@@ -3,6 +3,48 @@
 All notable changes to the public OpenAPI document are listed here. The version is the API's
 `info.version` as served at `https://api.faxforagents.com/openapi.json`.
 
+## 1.21.0 (2026-11-16)
+
+API version 1.21.0, curated from the server document at that release. 132 paths, 165 operations and
+175 schemas. 1.20.11 had 130, 163 and 174. This document skips 1.20.12, which changed only
+`info.version` here.
+
+- New operations `get_fax_history_csv`, `GET /v1/records/faxes.csv`, and `get_audit_csv`,
+  `GET /v1/records/audit.csv`. They are the records export of the Agent workspace plan. Each answers
+  CSV text for a range of UTC days, `from` and `to`, both included. A range of more than 20000 lines
+  answers 422.
+- The export answers while the plan is active and for 30 days after it ended. Otherwise it is 403
+  `workspace_required`, with `details.ended_at` and `details.closed_at`. The fax history needs `fax:read`
+  and `inbox:read`. The audit trail needs `org:admin` and refuses an agent. `scripts/curate.py` gives
+  both a scope and an `x-llm.hint`.
+- `list_faxes` takes `created_after`, included, and `created_before`, left out. Both are ISO 8601 times,
+  read as UTC when they carry no offset. A range that starts after it ends answers 422
+  `invalid_request`. The operation gains a description.
+- `Quote.live_amount_micro` says what the same fax costs with a live key. A test quote is free, so this
+  is what it would cost live. On a live quote it equals `amount_micro`. It is null when the rate card in
+  force is not the one the quote was priced on, or no longer serves the destination.
+- New schema `WorkspacePlan`, the required `plan` of `SubscriptionList`. It says whether the plan is
+  active and what it gives. That is the fax credit, how long records are kept, the request limits and
+  the included number. It also says when the plan ended, when the cleanup runs and whether the export is
+  open.
+- `Number.included_with_workspace` is true while the Agent workspace pays that number's monthly charge.
+  `NumberOrder.first_month_hold_micro` is 0 then, and for a test number.
+- `Capabilities.limits` gains a description. `requests_per_minute` is the limit of the calling
+  credential: 3000 while the Agent workspace is active, 600 otherwise. The `RateLimit-Limit` header says
+  the same.
+- One-time orders have three new statuses, set by a person at Fax for Agents: `refunding`, `refunded` and
+  `canceled`. They are in `OneTimeOrder`, `OneTimeOrderCreated`, `OneTimeConfirmSummary` and `OneTimeJob`,
+  and in the `status` filter of `list_one_time_orders`.
+- `OneTimeOrder` and `OneTimeOrderCreated` gain `refund_pending_micro`, a refund the payment provider has
+  not confirmed yet.
+- Descriptions say test where they said sandbox. These are `Capabilities.extraction_pricing` and the
+  `amount_micro` of `InboxItem`, `InboxItemDetail` and `InboxItemSummary`.
+- `PolicyEvaluation.approval_required` says it is false for a signed-in owner's own live send, which
+  needs no approval.
+- A new route of the dashboard sign-in, `leave_organization` (`POST /v1/auth/leave-organization`, tag
+  `auth`), stays out, as every `auth` route does. Its schemas `LeaveOrganization` and `LeftOrganization`
+  stay out with it, and so does its 409 `last_owner`.
+
 ## 1.20.11 (2026-11-15)
 
 API version 1.20.11, curated from the server document at that release. 130 paths, 163 operations and

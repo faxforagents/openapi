@@ -12,7 +12,7 @@ A fax job is `queued`, `active`, `partial`, `failed`, `unknown` or `delivered`. 
 
 Errors are one envelope: `{"error": {"code", "message", "retryable", "correlation_id", "details"}}`. Rate limits answer 429 with `Retry-After`.
 
-Base URL: https://api.faxforagents.com. Version 1.20.11.
+Base URL: https://api.faxforagents.com. Version 1.21.0.
 Authentication: `Authorization: Bearer ffa_live_...` or `X-API-Key`. Test keys are `ffa_test_...` and reach the sandbox only.
 
 ## Documents
@@ -256,6 +256,10 @@ The organizations the caller belongs to, the current one, data export and deleti
 - `GET /v1/organizations/current/data-requests` The organization's export and deletion requests and where each stands. Scope `account:read`.
 - `DELETE /v1/organizations/current/deletion-requests/{request_id}` Withdraw an open deletion request (owner). Scope `org:admin` (Idempotency-Key, never an agent key).
 - `GET /v1/organization/export-archives/{token}` Download an organization archive with a signed link valid for 72 hours. Scope `signed-url`.
+- `GET /v1/records/faxes.csv` The fax history as CSV: every fax sent and received in the range. Scope `fax:read`.
+  Needs inbox:read as well as fax:read. The answer is CSV text. Without the Agent workspace plan it is 403 workspace_required.
+- `GET /v1/records/audit.csv` The audit trail as CSV: every action on the organization in the range. Scope `org:admin` (never an agent key).
+  The answer is CSV text. Without the Agent workspace plan it is 403 workspace_required.
 
 ### members
 

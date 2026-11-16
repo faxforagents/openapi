@@ -32,7 +32,7 @@ repository holds the public OpenAPI document of the API.
 
 | File | What it is |
 |---|---|
-| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 163 operations in 130 paths, 174 schemas, version 1.20.11 |
+| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 165 operations in 132 paths, 175 schemas, version 1.21.0 |
 | [`docs/`](docs/) | The rendered reference, published at <https://faxforagents.github.io/openapi/> |
 | [`docs/llms.txt`](docs/llms.txt) | The same contract written for a model |
 | [`scripts/curate.py`](scripts/curate.py) | Produces `openapi.yaml` from the server's own document |
@@ -84,6 +84,10 @@ POST /v1/faxes                quote_id (+ Idempotency-Key)          ->  fax_...,
 GET  /v1/faxes/{fax_id}       poll                                  ->  state, evidence once delivered
 ```
 
+A test quote is free. Its `live_amount_micro` says what the same fax would cost with a live key.
+`GET /v1/faxes` takes `created_after` and `created_before` for a time range in UTC. The start is
+included and the end is left out.
+
 A file goes through `POST /v1/uploads` with its `filename` and `size_bytes`, a `PUT` of the bytes to
 the signed `upload_url`, `POST /v1/uploads/{id}/complete` with the sha256, then `POST /v1/documents`
 with the `upload_id`. The file is a PDF or an image: `application/pdf`, `image/png`, `image/jpeg` or
@@ -96,6 +100,19 @@ Beyond the send flow the document covers keys, webhooks, events, billing, the sa
 delegated policies, agent identities and the inbox. It covers fax numbers: coverage, inventory, orders,
 porting and sender verification. It covers extractions: OCR, fields, classification, summaries and
 saved schemas. It covers the organization with its members, the auto-send setting and connected apps.
+
+## The Agent workspace
+
+`GET /v1/subscriptions` answers `plan`, what the Agent workspace gives and where the organization stands
+with it. While the plan is active, each credential may make 3000 requests a minute instead of 600.
+`GET /v1/capabilities` names the limit in force as `limits.requests_per_minute`, and so does the
+`RateLimit-Limit` header of every answer. The plan pays the monthly charge of the oldest live local
+number, and that number reads `included_with_workspace` true.
+
+`GET /v1/records/faxes.csv` and `GET /v1/records/audit.csv` export the fax history and the audit trail
+as CSV, for a range of UTC days. They answer while the plan is active and for 30 days after it ended.
+Otherwise the answer is 403 `workspace_required`. The fax history needs `inbox:read` as well as
+`fax:read`. The audit trail needs `org:admin` and refuses an agent's key.
 
 ## One fax by card
 
@@ -122,6 +139,11 @@ key, the send must have an approval or a delegated policy, as a wallet send does
 `approval_id` on the from-quote body. A test key is refused: an order is always live. The card is
 held at checkout. A failed fax costs nothing, and a fax that stops part way costs the price of the pages
 the carrier confirms.
+
+A person at Fax for Agents can refund an order or release the hold on its card. The order then reads
+`refunding` while a refund is on its way and `refunded` once the whole charge went back. It reads
+`canceled` when the hold was released and nothing was charged. `refund_pending_micro` is a refund the
+payment provider has not confirmed yet.
 
 The person who pays accepts the acceptable use policy and the terms, never a key. With a key, the
 order starts with `aup_accepted` false and carries a `status_url`, the order's page. Hand that link to
@@ -168,8 +190,8 @@ resets the organization's test data and reseeds the test wallet.
 
 Amounts are integer USD micro-units. `39000` is $0.039. Price card launch-v3 is effective from
 2026-11-12. $0.039 per page sent, $0.019 per page received. $2 per number per month, $19 per month
-for the Agent workspace. Sandbox pages cost 0. `GET /v1/capabilities` returns the card in force with its
-`price_version`.
+for the Agent workspace. With a test key, every page costs 0. `GET /v1/capabilities` returns the card in
+force with its `price_version`.
 
 One fax by card costs $2.49 for a document of up to 5 pages to a US or Canadian number, cover page
 included. Each extra page is $0.49, up to 20 pages. These one-time prices were published on 2026-11-11.
@@ -193,8 +215,9 @@ one table at <https://faxforagents.com/docs/limits/>. `429` carries `Retry-After
 The errors an operation can answer are declared on it. The shared ones are in `components.responses`:
 401, 402, 403, 404, 409, 410, 413, 422, 429 and 503, each the envelope above. Where the shared words are
 not true of a route, it carries its own. The document and inbox routes name their 410. The billing routes
-that refuse a test key name `environment_not_billable` under 403. Key rotation, top-up cancel and the replay
-of a webhook delivery name the `details` of their 409. A field that fails validation answers 422
+that refuse a test key name `environment_not_billable` under 403, and the records export names
+`workspace_required` there. Key rotation, top-up cancel and the replay of a webhook delivery name the
+`details` of their 409. A field that fails validation answers 422
 `invalid_request` in the same envelope.
 Repeat a mutating call with the same `Idempotency-Key` and the same resource comes back with
 `Idempotent-Replayed: true`.
