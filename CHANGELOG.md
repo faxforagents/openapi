@@ -3,6 +3,31 @@
 All notable changes to the public OpenAPI document are listed here. The version is the API's
 `info.version` as served at `https://api.faxforagents.com/openapi.json`.
 
+## 1.21.2 (2026-11-16)
+
+API version 1.21.2, curated from the server document at that release. 132 paths, 165 operations and
+175 schemas, the same as 1.21.0. No operation or schema is new. This document skips 1.21.1, which
+changed only `info.version` here.
+
+- `Subscription` gains `cancel_at` and `ends_at`. Both are required and nullable. `cancel_at` is
+  when Stripe is set to end the subscription. A cancel in the billing portal sets it to the end of the
+  period and leaves `cancel_at_period_end` false.
+- `ends_at` is when the plan ends without another charge. It is `cancel_at` when that comes no later
+  than `current_period_end`, or `current_period_end` after a cancel at the period's end. It is null
+  while the plan renews.
+- `create_subscription_checkout` gains a description. It answers the address of Stripe's payment page
+  for the plan.
+- Its 409 has its own text, written by the server. `error.code` is `conflict` and
+  `error.details.reason` says why. `plan_active` means the plan is active, here or at Stripe right
+  after a payment. `checkout_open` means a Checkout of the plan is still open. Then `error.details.url`
+  is its page and `error.details.expires_at` is when it closes. The same 409 names
+  `idempotency_key_conflict`.
+- `OneTimeConfirmSummary.state` gains `link_canceled`, for an order that was canceled with its hold
+  released. The description of the schema names it.
+- The descriptions of `get_fax_history_csv` and of its 403 name both scopes. `x-required-scope` is
+  `fax:read`, and the export needs `inbox:read` as well.
+- The description of `OneTimeOrder` is split into shorter sentences. Its fields do not change.
+
 ## 1.21.0 (2026-11-16)
 
 API version 1.21.0, curated from the server document at that release. 132 paths, 165 operations and
