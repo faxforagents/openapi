@@ -281,6 +281,8 @@ SCOPES: dict[str, str] = {
     "list_data_requests": "account:read",
     "withdraw_data_deletion": "org:admin",
     "download_export_archive": "signed-url",
+    "get_fax_history_csv": "fax:read",
+    "get_audit_csv": "org:admin",
     "get_auto_send": "policy:read",
     "put_auto_send": "org:admin",
     "list_members": "account:read",
@@ -459,6 +461,11 @@ HINTS: dict[str, str] = {
     ),
     "confirm_one_time_order": "The token comes from the mailed link and works once. This releases the fax.",
     "resend_one_time_confirmation": "At most three times per order and once in ten minutes.",
+    "get_fax_history_csv": (
+        "Needs inbox:read as well as fax:read. The answer is CSV text. Without the Agent workspace plan it is "
+        "403 workspace_required."
+    ),
+    "get_audit_csv": "The answer is CSV text. Without the Agent workspace plan it is 403 workspace_required.",
 }
 
 #: Operations that reach the carrier with a live key. On a production server with no carrier configured
