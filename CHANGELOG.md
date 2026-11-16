@@ -24,6 +24,8 @@ changed only `info.version` here.
   `idempotency_key_conflict`.
 - `OneTimeConfirmSummary.state` gains `link_canceled`, for an order that was canceled with its hold
   released. The description of the schema names it.
+- The 409 of `confirm_one_time_order` names `link_canceled` too. The server answers it since 1.21.2 and
+  its document names only the shared 409, so `scripts/curate.py` writes the code.
 - The descriptions of `get_fax_history_csv` and of its 403 name both scopes. `x-required-scope` is
   `fax:read`, and the export needs `inbox:read` as well.
 - The description of `OneTimeOrder` is split into shorter sentences. Its fields do not change.

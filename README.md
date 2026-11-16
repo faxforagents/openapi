@@ -157,8 +157,8 @@ order starts with `aup_accepted` false and carries a `status_url`, the order's p
 the person who pays. They accept the terms there and the checkout opens. `queue` on the config and on the order says whether a
 fax would wait for a carrier line, with `jobs_ahead` and `estimated_wait_minutes`. The confirm page
 reads a mailed link with `POST /v1/one-time-sends/by-token` and the token in the body. The answer's
-`state` is `link_canceled` once the order was canceled. The older `GET /v1/one-time-sends/by-token/{token}`
-is deprecated.
+`state` is `link_canceled` once the order was canceled, and a confirm then answers 409 `link_canceled`.
+The older `GET /v1/one-time-sends/by-token/{token}` is deprecated.
 
 ## States
 
