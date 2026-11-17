@@ -3,6 +3,15 @@
 All notable changes to the public OpenAPI document are listed here. The version is the API's
 `info.version` as served at `https://api.faxforagents.com/openapi.json`.
 
+## 1.21.3 (2026-11-17)
+
+API version 1.21.3, curated from the server document at that release. 132 paths, 165 operations and
+175 schemas, the same as 1.21.2. No operation or schema is new, and no field changed its type.
+
+- The description of `Subscription.ends_at` says that it is null whenever `entitled` is false, as after
+  the plan ended. It said only that it is null while the plan renews. At 1.21.2 the server already
+  sent null for a subscription that no longer entitles, so no answer changes.
+
 ## 1.21.2 (2026-11-16)
 
 API version 1.21.2, curated from the server document at that release. 132 paths, 165 operations and
