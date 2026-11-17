@@ -32,7 +32,7 @@ repository holds the public OpenAPI document of the API.
 
 | File | What it is |
 |---|---|
-| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 165 operations in 132 paths, 175 schemas, version 1.21.2 |
+| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 165 operations in 132 paths, 175 schemas, version 1.21.3 |
 | [`docs/`](docs/) | The rendered reference, published at <https://faxforagents.github.io/openapi/> |
 | [`docs/llms.txt`](docs/llms.txt) | The same contract written for a model |
 | [`scripts/curate.py`](scripts/curate.py) | Produces `openapi.yaml` from the server's own document |
@@ -114,7 +114,7 @@ plan is active, or a payment page for it is still open, the answer is 409 `confl
 never paid twice. `error.details.reason` is then `plan_active` or `checkout_open`, and `checkout_open`
 carries the open page's `url` and its `expires_at`. Each subscription names `cancel_at`, the end date
 Stripe holds, and `ends_at`, when the plan ends without another charge. `ends_at` is null while the plan
-renews, and once the plan has ended.
+renews, and whenever `entitled` is false, as after the plan ended.
 
 `GET /v1/records/faxes.csv` and `GET /v1/records/audit.csv` export the fax history and the audit trail
 as CSV, for a range of UTC days. They answer while the plan is active and for 30 days after it ended.
