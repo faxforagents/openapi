@@ -14,7 +14,7 @@ changed only `info.version` here.
   period and leaves `cancel_at_period_end` false.
 - `ends_at` is when the plan ends without another charge. It is `cancel_at` when that comes no later
   than `current_period_end`, or `current_period_end` after a cancel at the period's end. It is null
-  while the plan renews.
+  while the plan renews, and once the plan has ended.
 - `create_subscription_checkout` gains a description. It answers the address of Stripe's payment page
   for the plan.
 - Its 409 has its own text, written by the server. `error.code` is `conflict` and

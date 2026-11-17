@@ -114,7 +114,7 @@ plan is active, or a payment page for it is still open, the answer is 409 `confl
 never paid twice. `error.details.reason` is then `plan_active` or `checkout_open`, and `checkout_open`
 carries the open page's `url` and its `expires_at`. Each subscription names `cancel_at`, the end date
 Stripe holds, and `ends_at`, when the plan ends without another charge. `ends_at` is null while the plan
-renews.
+renews, and once the plan has ended.
 
 `GET /v1/records/faxes.csv` and `GET /v1/records/audit.csv` export the fax history and the audit trail
 as CSV, for a range of UTC days. They answer while the plan is active and for 30 days after it ended.
