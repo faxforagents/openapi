@@ -570,7 +570,8 @@ def insufficient_balance_schema(with_offer: bool, with_top_up: bool = False) -> 
 
 #: operationId -> status -> the description of an error the server answers there and does not declare in
 #: its own document. Read from the server's routes and services (1.17.0). The codes are stable. Since 1.20.10
-#: the server writes the 409 of rotate_api_key and cancel_topup_session itself, so neither is here.
+#: the server writes the 409 of rotate_api_key and cancel_topup_session itself, so neither is here. The
+#: ``link_canceled`` of confirm_one_time_order is read from ``onetime/release.py`` of 1.21.2.
 DOCUMENTED_ERRORS: dict[str, dict[str, str]] = {
     "create_fax": {
         "402": (
@@ -616,7 +617,11 @@ DOCUMENTED_ERRORS: dict[str, dict[str, str]] = {
     },
     "confirm_one_time_order": {
         "404": "The confirmation link is not valid for this order (link_invalid).",
-        "409": "The link was already used (link_used), expired (link_expired), or the browser is signed in as someone else (link_other_session).",
+        "409": (
+            "The link was already used (link_used), its order was canceled and the hold released "
+            "(link_canceled), it expired (link_expired), or the browser is signed in as someone else "
+            "(link_other_session)."
+        ),
     },
     "resend_one_time_confirmation": {
         "409": "The order is not waiting for its confirmation (order_closed).",

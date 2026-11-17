@@ -32,7 +32,7 @@ repository holds the public OpenAPI document of the API.
 
 | File | What it is |
 |---|---|
-| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 165 operations in 132 paths, 175 schemas, version 1.21.0 |
+| [`openapi.yaml`](openapi.yaml) | OpenAPI 3.1, 165 operations in 132 paths, 175 schemas, version 1.21.2 |
 | [`docs/`](docs/) | The rendered reference, published at <https://faxforagents.github.io/openapi/> |
 | [`docs/llms.txt`](docs/llms.txt) | The same contract written for a model |
 | [`scripts/curate.py`](scripts/curate.py) | Produces `openapi.yaml` from the server's own document |
@@ -109,6 +109,13 @@ with it. While the plan is active, each credential may make 3000 requests a minu
 `RateLimit-Limit` header of every answer. The plan pays the monthly charge of the oldest live local
 number, and that number reads `included_with_workspace` true.
 
+`POST /v1/subscriptions/checkout` answers the address of Stripe's payment page for the plan. While the
+plan is active, or a payment page for it is still open, the answer is 409 `conflict`, so the plan is
+never paid twice. `error.details.reason` is then `plan_active` or `checkout_open`, and `checkout_open`
+carries the open page's `url` and its `expires_at`. Each subscription names `cancel_at`, the end date
+Stripe holds, and `ends_at`, when the plan ends without another charge. `ends_at` is null while the plan
+renews, and once the plan has ended.
+
 `GET /v1/records/faxes.csv` and `GET /v1/records/audit.csv` export the fax history and the audit trail
 as CSV, for a range of UTC days. They answer while the plan is active and for 30 days after it ended.
 Otherwise the answer is 403 `workspace_required`. The fax history needs `inbox:read` as well as
@@ -149,8 +156,9 @@ The person who pays accepts the acceptable use policy and the terms, never a key
 order starts with `aup_accepted` false and carries a `status_url`, the order's page. Hand that link to
 the person who pays. They accept the terms there and the checkout opens. `queue` on the config and on the order says whether a
 fax would wait for a carrier line, with `jobs_ahead` and `estimated_wait_minutes`. The confirm page
-reads a mailed link with `POST /v1/one-time-sends/by-token` and the token in the body. The older
-`GET /v1/one-time-sends/by-token/{token}` is deprecated.
+reads a mailed link with `POST /v1/one-time-sends/by-token` and the token in the body. The answer's
+`state` is `link_canceled` once the order was canceled, and a confirm then answers 409 `link_canceled`.
+The older `GET /v1/one-time-sends/by-token/{token}` is deprecated.
 
 ## States
 
@@ -216,8 +224,8 @@ The errors an operation can answer are declared on it. The shared ones are in `c
 401, 402, 403, 404, 409, 410, 413, 422, 429 and 503, each the envelope above. Where the shared words are
 not true of a route, it carries its own. The document and inbox routes name their 410. The billing routes
 that refuse a test key name `environment_not_billable` under 403, and the records export names
-`workspace_required` there. Key rotation, top-up cancel and the replay of a webhook delivery name the
-`details` of their 409. A field that fails validation answers 422
+`workspace_required` there. Key rotation, top-up cancel, the replay of a webhook delivery and the
+workspace checkout name the `details` of their 409. A field that fails validation answers 422
 `invalid_request` in the same envelope.
 Repeat a mutating call with the same `Idempotency-Key` and the same resource comes back with
 `Idempotent-Replayed: true`.
